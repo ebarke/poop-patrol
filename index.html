@@ -1,789 +1,1463 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#2d5a1b" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Poop Patrol" />
-  <meta name="description" content="GPS-guided dog poop cleanup app with shortest path routing" />
-  <title>Poop Patrol 💩</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#2d5a1b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Poop Patrol" />
+    <meta name="description" content="GPS-guided dog poop cleanup app with shortest path routing" />
+    <title>Poop Patrol 💩</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-    :root {
-      --green-dark:   #2d5a1b;
-      --green-mid:    #3b7a22;
-      --green-light:  #639922;
-      --green-pale:   #c0dd97;
-      --green-bg:     #eaf3de;
-      --amber-dark:   #412402;
-      --amber-mid:    #854f0b;
-      --amber-light:  #ef9f27;
-      --amber-pale:   #fac775;
-      --amber-bg:     #faeeda;
-      --red-light:    #f09595;
-      --red-mid:      #e24b4a;
-      --red-bg:       #fcebeb;
-      --red-dark:     #501313;
-      --blue-mid:     #378add;
-      --white:        #ffffff;
-      --gray-50:      #f8f9fa;
-      --gray-100:     #f1f3f4;
-      --gray-200:     #e8eaed;
-      --gray-400:     #9aa0a6;
-      --gray-600:     #5f6368;
-      --gray-900:     #1a1a1a;
-      --surface:      #ffffff;
-      --radius-sm:    6px;
-      --radius-md:    10px;
-      --radius-lg:    16px;
-      --radius-xl:    24px;
-      --font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --shadow-sm:    0 1px 3px rgba(0,0,0,0.12);
-      --shadow-md:    0 4px 12px rgba(0,0,0,0.15);
-    }
+        :root {
+            --green-dark: #2d5a1b;
+            --green-mid: #3b7a22;
+            --green-light: #639922;
+            --green-pale: #c0dd97;
+            --green-bg: #eaf3de;
+            --amber-dark: #412402;
+            --amber-mid: #854f0b;
+            --amber-light: #ef9f27;
+            --amber-pale: #fac775;
+            --amber-bg: #faeeda;
+            --red-light: #f09595;
+            --red-mid: #e24b4a;
+            --red-bg: #fcebeb;
+            --red-dark: #501313;
+            --blue-mid: #378add;
+            --white: #ffffff;
+            --gray-50: #f8f9fa;
+            --gray-100: #f1f3f4;
+            --gray-200: #e8eaed;
+            --gray-400: #9aa0a6;
+            --gray-600: #5f6368;
+            --gray-900: #1a1a1a;
+            --surface: #ffffff;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+        }
 
-    html, body {
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-      font-family: var(--font);
-      background: var(--green-dark);
-      color: var(--gray-900);
-      -webkit-tap-highlight-color: transparent;
-    }
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: var(--font);
+            background: var(--green-dark);
+            color: var(--gray-900);
+            -webkit-tap-highlight-color: transparent;
+        }
 
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      height: 100dvh;
-      max-width: 480px;
-      margin: 0 auto;
-      background: var(--surface);
-      position: relative;
-    }
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            height: 100dvh;
+            max-width: 480px;
+            margin: 0 auto;
+            background: var(--surface);
+            position: relative;
+        }
 
-    /* ── Header ── */
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      padding-top: max(12px, env(safe-area-inset-top));
-      background: var(--green-dark);
-      color: white;
-      flex-shrink: 0;
-      z-index: 10;
-    }
-    .header-left { display: flex; align-items: center; gap: 10px; }
-    .header-logo { font-size: 26px; line-height: 1; }
-    .header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-    .header-sub { font-size: 11px; opacity: 0.75; margin-top: 1px; }
-    .header-badge {
-      font-size: 12px; font-weight: 600;
-      padding: 4px 12px; border-radius: 20px;
-      background: var(--amber-pale); color: var(--amber-dark);
-      transition: background 0.2s;
-    }
-    .header-badge.clean { background: var(--green-pale); color: var(--green-dark); }
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            padding-top: max(12px, env(safe-area-inset-top));
+            background: var(--green-dark);
+            color: white;
+            flex-shrink: 0;
+            z-index: 10;
+        }
 
-    /* ── Map ── */
-    #map {
-      flex: 1;
-      position: relative;
-      z-index: 0;
-    }
-    .leaflet-container { height: 100%; width: 100%; }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-    /* ── Map overlays ── */
-    .map-hint {
-      position: absolute;
-      top: 12px; left: 50%; transform: translateX(-50%);
-      padding: 6px 16px; border-radius: 20px;
-      font-size: 12px; font-weight: 600;
-      pointer-events: none; z-index: 500;
-      white-space: nowrap; transition: all 0.2s;
-    }
-    .hint-mark { background: var(--amber-pale); color: var(--amber-dark); border: 1.5px solid var(--amber-light); }
-    .hint-pickup { background: var(--green-pale); color: var(--green-dark); border: 1.5px solid var(--green-light); }
+        .header-logo {
+            font-size: 26px;
+            line-height: 1;
+        }
 
-    .gps-status {
-      position: absolute;
-      bottom: 12px; right: 12px;
-      background: white; border-radius: var(--radius-md);
-      padding: 6px 10px; font-size: 11px; font-weight: 500;
-      color: var(--gray-600); box-shadow: var(--shadow-sm);
-      z-index: 500; display: flex; align-items: center; gap: 6px;
-    }
-    .gps-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--gray-400); flex-shrink: 0;
-      transition: background 0.3s;
-    }
-    .gps-dot.ready { background: #34a853; animation: pulse-dot 2s infinite; }
-    .gps-dot.searching { background: var(--amber-light); animation: pulse-dot 1s infinite; }
-    .gps-dot.error { background: var(--red-mid); }
-    @keyframes pulse-dot {
-      0%,100% { opacity: 1; } 50% { opacity: 0.4; }
-    }
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
 
-    /* ── Bottom panel ── */
-    .bottom-panel {
-      background: var(--surface);
-      border-top: 1px solid var(--gray-200);
-      flex-shrink: 0;
-      padding-bottom: max(8px, env(safe-area-inset-bottom));
-    }
+        .header-sub {
+            font-size: 11px;
+            opacity: 0.75;
+            margin-top: 1px;
+        }
 
-    /* Stats row */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--gray-200);
-    }
-    .stat-card {
-      background: var(--gray-100);
-      border-radius: var(--radius-md);
-      padding: 8px 10px;
-      text-align: center;
-    }
-    .stat-label { font-size: 10px; color: var(--gray-600); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
-    .stat-value { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-top: 2px; line-height: 1; }
-    .stat-unit { font-size: 10px; color: var(--gray-400); font-weight: 400; }
+        .header-badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: var(--amber-pale);
+            color: var(--amber-dark);
+            transition: background 0.2s;
+        }
 
-    /* Action buttons */
-    .action-row {
-      display: flex;
-      gap: 8px;
-      padding: 10px 12px;
-    }
-    .action-btn {
-      flex: 1;
-      display: flex; align-items: center; justify-content: center;
-      gap: 6px;
-      padding: 12px 8px;
-      border-radius: var(--radius-md);
-      border: none;
-      font-size: 13px; font-weight: 600; font-family: var(--font);
-      cursor: pointer;
-      transition: transform 0.1s, opacity 0.15s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .action-btn:active { transform: scale(0.96); }
-    .action-btn:disabled { opacity: 0.45; pointer-events: none; }
-    .btn-mark { background: var(--amber-bg); color: var(--amber-dark); border: 1.5px solid var(--amber-pale); }
-    .btn-mark.active { background: var(--amber-pale); border-color: var(--amber-light); }
-    .btn-pickup { background: var(--green-bg); color: var(--green-dark); border: 1.5px solid var(--green-pale); }
-    .btn-pickup.active { background: var(--green-pale); border-color: var(--green-light); }
-    .btn-share { background: var(--gray-100); color: var(--gray-600); border: 1.5px solid var(--gray-200); flex: 0 0 auto; padding: 12px 14px; }
-    .btn-clear { background: var(--red-bg); color: var(--red-dark); border: 1.5px solid var(--red-light); flex: 0 0 auto; padding: 12px 14px; }
+            .header-badge.clean {
+                background: var(--green-pale);
+                color: var(--green-dark);
+            }
 
-    /* Route list */
-    #route-section {
-      border-top: 1px solid var(--gray-200);
-      max-height: 180px;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    #route-section::-webkit-scrollbar { width: 3px; }
-    #route-section::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
-    .route-header {
-      padding: 8px 14px 4px;
-      font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
-      color: var(--gray-400); text-transform: uppercase;
-      background: var(--gray-50);
-      border-bottom: 1px solid var(--gray-200);
-      position: sticky; top: 0;
-    }
-    .route-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 14px;
-      border-bottom: 1px solid var(--gray-100);
-      font-size: 13px;
-    }
-    .route-item:last-child { border-bottom: none; }
-    .route-num {
-      width: 24px; height: 24px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; flex-shrink: 0;
-      background: var(--amber-pale); color: var(--amber-dark);
-    }
-    .route-num.done { background: var(--green-pale); color: var(--green-dark); }
-    .route-num.current { background: var(--amber-light); color: white; }
-    .route-name { flex: 1; color: var(--gray-900); }
-    .route-name.done { text-decoration: line-through; color: var(--gray-400); }
-    .route-dist { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+        /* ── Map ── */
+        #map {
+            flex: 1;
+            position: relative;
+            z-index: 0;
+        }
 
-    /* Share sheet */
-    .share-sheet {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: var(--surface);
-      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      padding: 20px 16px;
-      padding-bottom: max(20px, env(safe-area-inset-bottom));
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
-      z-index: 1000;
-      transform: translateY(100%);
-      transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-    }
-    .share-sheet.open { transform: translateY(0); }
-    .share-handle {
-      width: 36px; height: 4px; border-radius: 2px;
-      background: var(--gray-200); margin: 0 auto 16px;
-    }
-    .share-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
-    .share-url-box {
-      background: var(--gray-100); border-radius: var(--radius-md);
-      padding: 10px 12px; font-size: 11px; font-family: monospace;
-      color: var(--gray-600); word-break: break-all; margin-bottom: 12px;
-      max-height: 72px; overflow: hidden;
-    }
-    .share-btns { display: flex; gap: 8px; }
-    .share-btn {
-      flex: 1; padding: 12px; border-radius: var(--radius-md);
-      border: 1.5px solid var(--gray-200);
-      background: var(--gray-100); color: var(--gray-900);
-      font-size: 14px; font-weight: 600; font-family: var(--font);
-      cursor: pointer;
-    }
-    .share-btn.primary { background: var(--green-dark); color: white; border-color: transparent; }
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+        }
 
-    /* Toast */
-    .toast {
-      position: absolute; bottom: 100px; left: 50%;
-      transform: translateX(-50%) translateY(10px);
-      background: rgba(26,26,26,0.9); color: white;
-      padding: 9px 18px; border-radius: 20px;
-      font-size: 13px; font-weight: 500;
-      white-space: nowrap; z-index: 2000;
-      pointer-events: none;
-      animation: toast-anim 2.4s ease forwards;
-    }
-    @keyframes toast-anim {
-      0%  { opacity:0; transform:translateX(-50%) translateY(10px); }
-      12% { opacity:1; transform:translateX(-50%) translateY(0); }
-      75% { opacity:1; }
-      100%{ opacity:0; }
-    }
+        /* ── Map overlays ── */
+        .map-hint {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 500;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
 
-    /* GPS denied screen */
-    .gps-denied {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: 32px; text-align: center;
-      background: var(--surface); z-index: 900;
-    }
-    .gps-denied-icon { font-size: 52px; margin-bottom: 16px; }
-    .gps-denied h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-    .gps-denied p { font-size: 14px; color: var(--gray-600); line-height: 1.6; margin-bottom: 20px; }
-    .gps-denied-btn {
-      background: var(--green-dark); color: white;
-      border: none; border-radius: var(--radius-md);
-      padding: 12px 28px; font-size: 15px; font-weight: 600;
-      font-family: var(--font); cursor: pointer;
-    }
+        .hint-mark {
+            background: var(--amber-pale);
+            color: var(--amber-dark);
+            border: 1.5px solid var(--amber-light);
+        }
 
-    /* Shimmer for loading */
-    .map-loading {
-      position: absolute; inset: 0; z-index: 400;
-      background: var(--gray-100);
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 12px;
-    }
-    .map-loading-icon { font-size: 40px; animation: bounce 1s infinite alternate; }
-    @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-8px); } }
-    .map-loading-text { font-size: 14px; color: var(--gray-400); font-weight: 500; }
-  </style>
+        .hint-pickup {
+            background: var(--green-pale);
+            color: var(--green-dark);
+            border: 1.5px solid var(--green-light);
+        }
+
+        .gps-status {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: white;
+            border-radius: var(--radius-md);
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--gray-600);
+            box-shadow: var(--shadow-sm);
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .gps-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--gray-400);
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+            .gps-dot.ready {
+                background: #34a853;
+                animation: pulse-dot 2s infinite;
+            }
+
+            .gps-dot.searching {
+                background: var(--amber-light);
+                animation: pulse-dot 1s infinite;
+            }
+
+            .gps-dot.error {
+                background: var(--red-mid);
+            }
+
+        @keyframes pulse-dot {
+            0%,100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* ── Bottom panel ── */
+        .bottom-panel {
+            background: var(--surface);
+            border-top: 1px solid var(--gray-200);
+            flex-shrink: 0;
+            padding-bottom: max(8px, env(safe-area-inset-bottom));
+        }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .stat-card {
+            background: var(--gray-100);
+            border-radius: var(--radius-md);
+            padding: 8px 10px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--gray-600);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-top: 2px;
+            line-height: 1;
+        }
+
+        .stat-unit {
+            font-size: 10px;
+            color: var(--gray-400);
+            font-weight: 400;
+        }
+
+        /* Action buttons */
+        .action-row {
+            display: flex;
+            gap: 8px;
+            padding: 10px 12px;
+        }
+
+        .action-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 12px 8px;
+            border-radius: var(--radius-md);
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.15s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .action-btn:active {
+                transform: scale(0.96);
+            }
+
+            .action-btn:disabled {
+                opacity: 0.45;
+                pointer-events: none;
+            }
+
+        .btn-mark {
+            background: var(--amber-bg);
+            color: var(--amber-dark);
+            border: 1.5px solid var(--amber-pale);
+        }
+
+            .btn-mark.active {
+                background: var(--amber-pale);
+                border-color: var(--amber-light);
+            }
+
+        .btn-pickup {
+            background: var(--green-bg);
+            color: var(--green-dark);
+            border: 1.5px solid var(--green-pale);
+        }
+
+            .btn-pickup.active {
+                background: var(--green-pale);
+                border-color: var(--green-light);
+            }
+
+        .btn-share {
+            background: var(--gray-100);
+            color: var(--gray-600);
+            border: 1.5px solid var(--gray-200);
+            flex: 0 0 auto;
+            padding: 12px 14px;
+        }
+
+        .btn-clear {
+            background: var(--red-bg);
+            color: var(--red-dark);
+            border: 1.5px solid var(--red-light);
+            flex: 0 0 auto;
+            padding: 12px 14px;
+        }
+
+        /* Route list */
+        #route-section {
+            border-top: 1px solid var(--gray-200);
+            max-height: 180px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+            #route-section::-webkit-scrollbar {
+                width: 3px;
+            }
+
+            #route-section::-webkit-scrollbar-thumb {
+                background: var(--gray-200);
+                border-radius: 3px;
+            }
+
+        .route-header {
+            padding: 8px 14px 4px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            position: sticky;
+            top: 0;
+        }
+
+        .route-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            border-bottom: 1px solid var(--gray-100);
+            font-size: 13px;
+        }
+
+            .route-item:last-child {
+                border-bottom: none;
+            }
+
+        .route-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+            background: var(--amber-pale);
+            color: var(--amber-dark);
+        }
+
+            .route-num.done {
+                background: var(--green-pale);
+                color: var(--green-dark);
+            }
+
+            .route-num.current {
+                background: var(--amber-light);
+                color: white;
+            }
+
+        .route-name {
+            flex: 1;
+            color: var(--gray-900);
+        }
+
+            .route-name.done {
+                text-decoration: line-through;
+                color: var(--gray-400);
+            }
+
+        .route-dist {
+            font-size: 11px;
+            color: var(--gray-400);
+            font-weight: 500;
+        }
+
+        /* Share sheet */
+        .share-sheet {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            padding: 20px 16px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
+            z-index: 1000;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+
+            .share-sheet.open {
+                transform: translateY(0);
+            }
+
+        .share-handle {
+            width: 36px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--gray-200);
+            margin: 0 auto 16px;
+        }
+
+        .share-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .share-url-box {
+            background: var(--gray-100);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
+            font-size: 11px;
+            font-family: monospace;
+            color: var(--gray-600);
+            word-break: break-all;
+            margin-bottom: 12px;
+            max-height: 72px;
+            overflow: hidden;
+        }
+
+        .share-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .share-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            border: 1.5px solid var(--gray-200);
+            background: var(--gray-100);
+            color: var(--gray-900);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+        }
+
+            .share-btn.primary {
+                background: var(--green-dark);
+                color: white;
+                border-color: transparent;
+            }
+
+        /* ── Confirm dialog ── */
+        .confirm-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 1500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+            .confirm-backdrop.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+
+        .confirm-dialog {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            padding: 24px 20px 20px;
+            width: 100%;
+            max-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+            transform: scale(0.93);
+            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+        }
+
+        .confirm-backdrop.open .confirm-dialog {
+            transform: scale(1);
+        }
+
+        .confirm-icon {
+            font-size: 36px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .confirm-title {
+            font-size: 17px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 8px;
+            color: var(--gray-900);
+        }
+
+        .confirm-msg {
+            font-size: 13px;
+            color: var(--gray-600);
+            text-align: center;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .confirm-btns {
+            display: flex;
+            gap: 10px;
+        }
+
+        .confirm-btn {
+            flex: 1;
+            padding: 13px 8px;
+            border-radius: var(--radius-md);
+            border: 1.5px solid var(--gray-200);
+            background: var(--gray-100);
+            color: var(--gray-900);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: transform 0.1s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+            .confirm-btn:active {
+                transform: scale(0.96);
+            }
+
+            .confirm-btn.danger {
+                background: var(--red-mid);
+                color: white;
+                border-color: transparent;
+            }
+
+        /* Toast */
+        .toast {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(26,26,26,0.9);
+            color: white;
+            padding: 9px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            z-index: 2000;
+            pointer-events: none;
+            animation: toast-anim 2.4s ease forwards;
+        }
+
+        @keyframes toast-anim {
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(10px);
+            }
+
+            12% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            75% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        /* GPS denied screen */
+        .gps-denied {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            text-align: center;
+            background: var(--surface);
+            z-index: 900;
+        }
+
+        .gps-denied-icon {
+            font-size: 52px;
+            margin-bottom: 16px;
+        }
+
+        .gps-denied h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .gps-denied p {
+            font-size: 14px;
+            color: var(--gray-600);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .gps-denied-btn {
+            background: var(--green-dark);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 12px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+        }
+
+        /* ── Compass rose ── */
+        #compass-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 44px;
+            height: 44px;
+            background: white;
+            border-radius: 50%;
+            border: none;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 500;
+            -webkit-tap-highlight-color: transparent;
+            padding: 0;
+            transition: box-shadow 0.2s;
+        }
+
+            #compass-btn:active {
+                box-shadow: var(--shadow-md);
+            }
+
+        #compass-svg {
+            width: 30px;
+            height: 30px;
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        #heading-badge {
+            position: absolute;
+            top: 64px;
+            right: 12px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            padding: 3px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--gray-600);
+            z-index: 500;
+            pointer-events: none;
+            letter-spacing: 0.2px;
+        }
+
+        #heading-up-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(45,90,27,0.9);
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            z-index: 500;
+            pointer-events: none;
+            display: none;
+        }
+
+            #heading-up-badge.active {
+                display: block;
+            }
+
+        /* Keep poop markers upright as map rotates */
+        .leaflet-marker-pane .leaflet-marker-icon {
+            transition: transform 0.4s cubic-bezier(0.25,0.8,0.25,1);
+        }
+
+        /* Shimmer for loading */
+        .map-loading {
+            position: absolute;
+            inset: 0;
+            z-index: 400;
+            background: var(--gray-100);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .map-loading-icon {
+            font-size: 40px;
+            animation: bounce 1s infinite alternate;
+        }
+
+        @keyframes bounce {
+            from {
+                transform: translateY(0);
+            }
+
+            to {
+                transform: translateY(-8px);
+            }
+        }
+
+        .map-loading-text {
+            font-size: 14px;
+            color: var(--gray-400);
+            font-weight: 500;
+        }
+    </style>
 </head>
 <body>
-<div id="app">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-left">
-      <span class="header-logo">💩</span>
-      <div>
-        <div class="header-title">Poop Patrol</div>
-        <div class="header-sub">GPS-guided yard cleanup</div>
-      </div>
-    </div>
-    <span id="badge" class="header-badge clean">0 zones</span>
-  </div>
+    <div id="app">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="header-logo">💩</span>
+                <div>
+                    <div class="header-title">Poop Patrol</div>
+                    <div class="header-sub">GPS-guided yard cleanup</div>
+                </div>
+            </div>
+            <span id="badge" class="header-badge clean">0 poops</span>
+        </div>
 
-  <!-- Map -->
-  <div id="map">
-    <div class="map-loading" id="map-loading">
-      <div class="map-loading-icon">📡</div>
-      <div class="map-loading-text">Acquiring GPS signal…</div>
-    </div>
-    <div id="map-container" style="height:100%;width:100%;display:none"></div>
-    <div id="map-hint" class="map-hint hint-mark">Tap map to mark poop</div>
-    <div class="gps-status">
-      <div id="gps-dot" class="gps-dot searching"></div>
-      <span id="gps-label">Locating…</span>
-    </div>
-  </div>
+        <!-- Map -->
+        <div id="map">
+            <div class="map-loading" id="map-loading">
+                <div class="map-loading-icon">📡</div>
+                <div class="map-loading-text">Acquiring GPS signal…</div>
+            </div>
+            <div id="map-container" style="height:100%;width:100%;display:none"></div>
+            <div id="map-hint" class="map-hint hint-mark">Tap map to mark poop</div>
+            <div id="heading-up-badge" class="heading-up-badge">⬆ Heading up</div>
+            <button id="compass-btn" title="Tap to reset north" onclick="resetNorth()">
+                <svg id="compass-svg" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="15" cy="15" r="13" fill="white" stroke="#e8eaed" stroke-width="1" />
+                    <!-- North needle (red) -->
+                    <polygon points="15,3 17.5,15 15,13 12.5,15" fill="#e24b4a" />
+                    <!-- South needle (gray) -->
+                    <polygon points="15,27 17.5,15 15,17 12.5,15" fill="#9aa0a6" />
+                    <!-- Center dot -->
+                    <circle cx="15" cy="15" r="2" fill="#5f6368" />
+                    <text x="15" y="8.5" text-anchor="middle" font-size="4.5" font-family="-apple-system,sans-serif" font-weight="700" fill="#e24b4a">N</text>
+                </svg>
+            </button>
+            <div id="heading-badge">—°</div>
+            <div class="gps-status">
+                <div id="gps-dot" class="gps-dot searching"></div>
+                <span id="gps-label">Locating…</span>
+            </div>
+        </div>
 
-  <!-- Bottom panel -->
-  <div class="bottom-panel">
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Zones</div>
-        <div class="stat-value" id="stat-count">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Remaining</div>
-        <div class="stat-value" id="stat-remain">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Next</div>
-        <div class="stat-value" id="stat-dist">—<span class="stat-unit"> m</span></div>
-      </div>
-    </div>
+        <!-- Bottom panel -->
+        <div class="bottom-panel">
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">
+                        Poops/div>
+                        <div class="stat-value" id="stat-count">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Remaining</div>
+                        <div class="stat-value" id="stat-remain">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Next</div>
+                        <div class="stat-value" id="stat-dist">—<span class="stat-unit"> m</span></div>
+                    </div>
+                </div>
 
-    <div class="action-row">
-      <button id="btn-mark" class="action-btn btn-mark active" onclick="setMode('mark')">✏️ Mark</button>
-      <button id="btn-pickup" class="action-btn btn-pickup" onclick="startPickup()" id="btn-pickup">🧤 Pickup</button>
-      <button class="action-btn btn-share" onclick="toggleShare()" title="Share">🔗</button>
-      <button class="action-btn btn-clear" onclick="clearAll()" title="Clear">🗑️</button>
-    </div>
+                <div class="action-row">
+                    <button id="btn-mark" class="action-btn btn-mark active" onclick="setMode('mark')">✏️ Mark</button>
+                    <button id="btn-pickup" class="action-btn btn-pickup" onclick="startPickup()" id="btn-pickup">🧤 Pickup</button>
+                    <button class="action-btn btn-share" onclick="toggleShare()" title="Share">🔗</button>
+                    <button class="action-btn btn-clear" onclick="showConfirmClear()" title="Clear all poops">🧹 Clear</button>
+                </div>
 
-    <div id="route-section" style="display:none">
-      <div class="route-header">Pickup route</div>
-      <div id="route-list"></div>
-    </div>
-  </div>
+                <div id="route-section" style="display:none">
+                    <div class="route-header">Pickup route</div>
+                    <div id="route-list"></div>
+                </div>
+            </div>
 
-  <!-- Share sheet -->
-  <div id="share-sheet" class="share-sheet">
-    <div class="share-handle"></div>
-    <div class="share-title">Share poop map 🔗</div>
-    <div id="share-url-box" class="share-url-box"></div>
-    <div class="share-btns">
-      <button class="share-btn" onclick="toggleShare()">Cancel</button>
-      <button class="share-btn primary" onclick="copyLink()">Copy link</button>
-    </div>
-  </div>
-</div>
+            <!-- Share sheet -->
+            <div id="share-sheet" class="share-sheet">
+                <div class="share-handle"></div>
+                <div class="share-title">Share poop map 🔗</div>
+                <div id="share-url-box" class="share-url-box"></div>
+                <div class="share-btns">
+                    <button class="share-btn" onclick="toggleShare()">Cancel</button>
+                    <button class="share-btn primary" onclick="copyLink()">Copy link</button>
+                </div>
+            </div>
+            <!-- Confirm clear dialog -->
+            <div id="confirm-backdrop" class="confirm-backdrop" onclick="closeConfirm()">
+                <div class="confirm-dialog" onclick="event.stopPropagation()">
+                    <div class="confirm-icon">🧹</div>
+                    <div class="confirm-title">Clear all poops?</div>
+                    <div class="confirm-msg">This will remove all <span id="confirm-count">0</span> poops and reset the route. This can't be undone.</div>
+                    <div class="confirm-btns">
+                        <button class="confirm-btn" onclick="closeConfirm()">Cancel</button>
+                        <button class="confirm-btn danger" onclick="confirmClear()">Clear all</button>
+                    </div>
+                </div>
+            </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-'use strict';
+            <!-- Confirm single-poop delete dialog -->
+            <div id="confirm-single-backdrop" class="confirm-backdrop" onclick="closeConfirmSingle()">
+                <div class="confirm-dialog" onclick="event.stopPropagation()">
+                    <div class="confirm-icon">💩</div>
+                    <div class="confirm-title">Delete this poop?</div>
+                    <div class="confirm-msg">Remove <strong id="confirm-single-name">Poop #?</strong> from the map? This can't be undone.</div>
+                    <div class="confirm-btns">
+                        <button class="confirm-btn" onclick="closeConfirmSingle()">Cancel</button>
+                        <button class="confirm-btn danger" onclick="confirmDeleteSingle()">Delete</button>
+                    </div>
+                </div>
+            </div>
 
-/* ── State ── */
-let map = null;
-let userLat = null, userLng = null;
-let watchId = null;
-let poops = [];          // { id, lat, lng, marker }
-let mode = 'mark';
-let route = [];          // ordered array of poop ids for pickup
-let routeIdx = 0;
-let routeLine = null;
-let userMarker = null;
-let gpsReady = false;
-let shareOpen = false;
+        </div>
+        <script>
+            'use strict';
 
-/* ── Haversine distance (metres) ── */
-function dist(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
-    * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+            /* ── State ── */
+            let map = null;
+            let userLat = null, userLng = null;
+            let watchId = null;
+            let poops = [];          // { id, lat, lng, marker }
+            let mode = 'mark';
+            let route = [];          // ordered array of poop ids for pickup
+            let routeIdx = 0;
+            let routeLine = null;
+            let userMarker = null;
+            let gpsReady = false;
+            let shareOpen = false;
+            let currentHeading = null;   // degrees, 0=north, 90=east
+            let headingSmoothed = null;  // low-pass filtered heading
+            let headingUpActive = false; // whether heading-up mode is on
+            let orientationGranted = false;
+            let pendingDeleteId = null;  // id of poop awaiting single-delete confirm
 
-/* ── Nearest Neighbour TSP ── */
-function buildRoute(originLat, originLng, items) {
-  const remaining = [...items];
-  const path = [];
-  let curLat = originLat, curLng = originLng;
-  while (remaining.length) {
-    let bestIdx = 0, bestDist = Infinity;
-    remaining.forEach((p, i) => {
-      const d = dist(curLat, curLng, p.lat, p.lng);
-      if (d < bestDist) { bestDist = d; bestIdx = i; }
-    });
-    const chosen = remaining.splice(bestIdx, 1)[0];
-    path.push(chosen);
-    curLat = chosen.lat; curLng = chosen.lng;
-  }
-  return path;
-}
+            /* ── Haversine distance (metres) ── */
+            function dist(lat1, lng1, lat2, lng2) {
+                const R = 6371000;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2
+                    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+                    * Math.sin(dLng / 2) ** 2;
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            }
 
-/* ── Leaflet icons ── */
-function makeUserIcon() {
-  return L.divIcon({
-    html: `<div style="width:18px;height:18px;border-radius:50%;background:#378add;border:3px solid #fff;box-shadow:0 0 0 3px rgba(55,138,221,.35)"></div>`,
-    iconSize: [18, 18], iconAnchor: [9, 9], className: ''
-  });
-}
+            /* ── Nearest Neighbour TSP ── */
+            function buildRoute(originLat, originLng, items) {
+                const remaining = [...items];
+                const path = [];
+                let curLat = originLat, curLng = originLng;
+                while (remaining.length) {
+                    let bestIdx = 0, bestDist = Infinity;
+                    remaining.forEach((p, i) => {
+                        const d = dist(curLat, curLng, p.lat, p.lng);
+                        if (d < bestDist) { bestDist = d; bestIdx = i; }
+                    });
+                    const chosen = remaining.splice(bestIdx, 1)[0];
+                    path.push(chosen);
+                    curLat = chosen.lat; curLng = chosen.lng;
+                }
+                return path;
+            }
 
-function makePoopIcon(num, state) {
-  /* state: 'default' | 'current' | 'done' */
-  const sizes = { default: 28, current: 36, done: 26 };
-  const sz = sizes[state] || 28;
-  const ringColor = state === 'current' ? '#ef9f27' : state === 'done' ? '#639922' : '#854f0b';
-  const bgColor   = state === 'current' ? '#fac775' : state === 'done' ? '#c0dd97' : '#faeeda';
-  const numColor  = state === 'done'    ? '#173404' : '#412402';
-  return L.divIcon({
-    html: `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${bgColor};
-      border:2.5px solid ${ringColor};display:flex;align-items:center;justify-content:center;
-      font-size:${sz * 0.55}px;position:relative">💩
-      <span style="position:absolute;bottom:-2px;right:-4px;background:white;border-radius:50%;
-        width:15px;height:15px;font-size:9px;font-weight:700;display:flex;align-items:center;
-        justify-content:center;color:${numColor};border:1px solid ${ringColor}">${num}</span>
-    </div>`,
-    iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2], className: ''
-  });
-}
+            /* ── Leaflet icons ── */
+            function makeUserIcon() {
+                // Arrow shape: always points up on screen (map rotates under it)
+                return L.divIcon({
+                    html: `<div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center">
+              <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(55,138,221,0.18)"></div>
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="10,2 15,16 10,12 5,16" fill="#378add" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+                <circle cx="10" cy="12" r="3.5" fill="#378add" stroke="white" stroke-width="1.5"/>
+              </svg>
+            </div>`,
+                    iconSize: [28, 28], iconAnchor: [14, 14], className: ''
+                });
+            }
 
-/* ── Map init ── */
-function initMap(lat, lng) {
-  if (map) return;
-  document.getElementById('map-loading').style.display = 'none';
-  const container = document.getElementById('map-container');
-  container.style.display = 'block';
+            function makePoopIcon(num, state) {
+                /* state: 'default' | 'current' | 'done' */
+                const sizes = { default: 28, current: 36, done: 26 };
+                const sz = sizes[state] || 28;
+                const ringColor = state === 'current' ? '#ef9f27' : state === 'done' ? '#639922' : '#854f0b';
+                const bgColor = state === 'current' ? '#fac775' : state === 'done' ? '#c0dd97' : '#faeeda';
+                const numColor = state === 'done' ? '#173404' : '#412402';
+                return L.divIcon({
+                    html: `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${bgColor};
+              border:2.5px solid ${ringColor};display:flex;align-items:center;justify-content:center;
+              font-size:${sz * 0.55}px;position:relative">💩
+              <span style="position:absolute;bottom:-2px;right:-4px;background:white;border-radius:50%;
+                width:15px;height:15px;font-size:9px;font-weight:700;display:flex;align-items:center;
+                justify-content:center;color:${numColor};border:1px solid ${ringColor}">${num}</span>
+            </div>`,
+                    iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2], className: ''
+                });
+            }
 
-  map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 22, maxNativeZoom: 19
-  }).addTo(map);
+            /* ── Map init ── */
+            function initMap(lat, lng) {
+                if (map) return;
+                document.getElementById('map-loading').style.display = 'none';
+                const container = document.getElementById('map-container');
+                container.style.display = 'block';
 
-  L.control.zoom({ position: 'topright' }).addTo(map);
-  L.control.attribution({ position: 'bottomleft', prefix: '© OpenStreetMap' }).addTo(map);
+                map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 22, maxNativeZoom: 19
+                }).addTo(map);
 
-  userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
+                L.control.zoom({ position: 'topright' }).addTo(map);
+                L.control.attribution({ position: 'bottomleft', prefix: '© OpenStreetMap' }).addTo(map);
 
-  map.on('click', e => {
-    if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
-    if (shareOpen) toggleShare();
-  });
+                userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
 
-  gpsReady = true;
-  setGpsUI('ready', '±' + Math.round(0) + 'm');
-}
+                map.on('click', e => {
+                    if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
+                    if (shareOpen) toggleShare();
+                });
 
-/* ── GPS ── */
-function setGpsUI(state, label) {
-  document.getElementById('gps-dot').className = 'gps-dot ' + state;
-  document.getElementById('gps-label').textContent = label;
-}
+                gpsReady = true;
+                setGpsUI('ready', '±' + Math.round(0) + 'm');
 
-function onGpsSuccess(pos) {
-  const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
-  const acc = Math.round(pos.coords.accuracy || 0);
+                // Start compass/heading tracking
+                startOrientationTracking();
+            }
 
-  if (!map) initMap(lat, lng);
-  userLat = lat; userLng = lng;
-  userMarker && userMarker.setLatLng([lat, lng]);
-  setGpsUI('ready', '±' + acc + 'm');
+            /* ── Heading-up map rotation ── */
+            function applyHeading(deg) {
+                if (!map) return;
+                // Low-pass filter to smooth jitter
+                if (headingSmoothed === null) {
+                    headingSmoothed = deg;
+                } else {
+                    // Shortest-path angular interpolation
+                    let diff = deg - headingSmoothed;
+                    if (diff > 180) diff -= 360;
+                    if (diff < -180) diff += 360;
+                    headingSmoothed += diff * 0.2;
+                    headingSmoothed = ((headingSmoothed % 360) + 360) % 360;
+                }
 
-  if (mode === 'pickup' && route.length > 0 && routeIdx < route.length) {
-    updateRouteLine();
-    refreshRouteList();
-    updateStats();
-    const target = route[routeIdx];
-    const d = dist(lat, lng, target.lat, target.lng);
-    if (d < 2.5) collectCurrent();  // within 2.5m → auto-collect
-  } else {
-    updateStats();
-  }
-}
+                currentHeading = headingSmoothed;
 
-function onGpsError(err) {
-  setGpsUI('error', 'GPS error');
-  // Show error overlay with instructions
-  showGpsDenied(err.code === 1 ? 'permission' : 'timeout');
-}
+                // Rotate the Leaflet map container
+                const container = map.getContainer();
+                container.style.transform = `rotate(${-headingSmoothed}deg)`;
+                container.style.transformOrigin = '50% 50%';
+                container.style.transition = 'transform 0.4s cubic-bezier(0.25,0.8,0.25,1)';
 
-function showGpsDenied(type) {
-  if (map) return; // already have map, skip
-  const msg = type === 'permission'
-    ? 'Location permission was denied. Enable it in your browser/device settings and reload.'
-    : 'GPS signal timed out. Make sure you\'re outdoors with a clear sky view.';
-  document.getElementById('map-loading').innerHTML = `
-    <div class="gps-denied">
-      <div class="gps-denied-icon">📍</div>
-      <h2>Location needed</h2>
-      <p>${msg}</p>
-      <button class="gps-denied-btn" onclick="location.reload()">Try again</button>
-    </div>`;
-}
+                // Keep markers upright by counter-rotating the marker pane
+                // The user marker (arrow) intentionally stays pointing up — no counter-rotation needed
+                // Poop markers need to stay upright
+                const markerPane = map.getPane('markerPane');
+                if (markerPane) {
+                    // Counter-rotate the entire marker pane except user marker
+                    // We handle this per icon via CSS class set on the container
+                    container.style.setProperty('--map-heading', headingSmoothed + 'deg');
+                }
 
-/* ── Poop CRUD ── */
-let poopSeq = 0;
-function addPoop(lat, lng) {
-  poopSeq++;
-  const id = 'p' + Date.now() + '_' + poopSeq;
-  const marker = L.marker([lat, lng], { icon: makePoopIcon(poopSeq, 'default') }).addTo(map);
-  marker.bindPopup(`<b>Zone #${poopSeq}</b><br><small>${lat.toFixed(6)}, ${lng.toFixed(6)}</small>`);
-  marker.on('click', e => {
-    if (mode === 'pickup') {
-      const routePos = route.findIndex(r => r.id === id);
-      if (routePos === routeIdx) collectCurrent();
-    }
-  });
-  const poop = { id, lat, lng, seq: poopSeq, marker };
-  poops.push(poop);
-  updateBadge();
-  updateStats();
-  saveHash();
-  showToast('💩 Zone #' + poopSeq + ' marked');
-}
+                // Counter-rotate poop icons so they stay upright
+                poops.forEach(p => {
+                    if (p.marker) {
+                        const el = p.marker.getElement();
+                        if (el) el.style.transform = el.style.transform.replace(/\s*rotate\([^)]*\)/, '') + ` rotate(${headingSmoothed}deg)`;
+                    }
+                });
 
-function removePoop(id) {
-  const idx = poops.findIndex(p => p.id === id);
-  if (idx === -1) return;
-  const poop = poops[idx];
-  if (poop.marker && map) map.removeLayer(poop.marker);
-  poops.splice(idx, 1);
-  updateBadge();
-  saveHash();
-}
+                // Update compass — counter-rotate needle so N always points to true north
+                const compassSvg = document.getElementById('compass-svg');
+                if (compassSvg) compassSvg.style.transform = `rotate(${headingSmoothed}deg)`;
 
-/* ── Mode ── */
-function setMode(m) {
-  mode = m;
-  document.getElementById('btn-mark').className = 'action-btn btn-mark' + (m === 'mark' ? ' active' : '');
-  document.getElementById('btn-pickup').className = 'action-btn btn-pickup' + (m === 'pickup' ? ' active' : '');
-  const hint = document.getElementById('map-hint');
-  if (m === 'mark') {
-    hint.className = 'map-hint hint-mark'; hint.textContent = 'Tap map to mark poop';
-  } else {
-    hint.className = 'map-hint hint-pickup'; hint.textContent = 'Walk to highlighted 💩';
-  }
-}
+                // Update heading badge
+                const badge = document.getElementById('heading-badge');
+                if (badge) {
+                    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                    const dir = dirs[Math.round(headingSmoothed / 45) % 8];
+                    badge.textContent = Math.round(headingSmoothed) + '° ' + dir;
+                }
 
-/* ── Pickup / routing ── */
-function startPickup() {
-  if (poops.length === 0) { showToast('No poop zones marked yet!'); return; }
-  if (!gpsReady || userLat == null) { showToast('Waiting for GPS signal…'); return; }
+                headingUpActive = true;
+                const hBadge = document.getElementById('heading-up-badge');
+                if (hBadge) hBadge.classList.add('active');
+            }
 
-  route = buildRoute(userLat, userLng, [...poops]);
-  routeIdx = 0;
-  setMode('pickup');
-  refreshPoopIcons();
-  updateRouteLine();
-  document.getElementById('route-section').style.display = '';
-  refreshRouteList();
-  updateStats();
-  if (route.length > 0) map.setView([route[0].lat, route[0].lng], 20);
-  showToast('Route ready — ' + route.length + ' stops 🗺️');
-}
+            function resetNorth() {
+                if (!map) return;
+                // Reset map rotation to north-up
+                const container = map.getContainer();
+                container.style.transform = 'rotate(0deg)';
+                container.style.transition = 'transform 0.4s cubic-bezier(0.25,0.8,0.25,1)';
+                const compassSvg = document.getElementById('compass-svg');
+                if (compassSvg) compassSvg.style.transform = 'rotate(0deg)';
+                const badge = document.getElementById('heading-badge');
+                if (badge) badge.textContent = '0° N';
+                headingUpActive = false;
+                headingSmoothed = 0;
+                const hBadge = document.getElementById('heading-up-badge');
+                if (hBadge) hBadge.classList.remove('active');
+                showToast('🧭 North up');
+            }
 
-function collectCurrent() {
-  if (routeIdx >= route.length) return;
-  const target = route[routeIdx];
-  removePoop(target.id);
-  routeIdx++;
+            function startOrientationTracking() {
+                // iOS 13+ requires permission
+                if (typeof DeviceOrientationEvent !== 'undefined' &&
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(state => {
+                            if (state === 'granted') bindOrientation();
+                            else showToast('Compass permission denied');
+                        }).catch(() => showToast('Compass unavailable'));
+                } else if (typeof DeviceOrientationEvent !== 'undefined') {
+                    bindOrientation();
+                }
+            }
 
-  if (routeIdx >= route.length) {
-    // All done!
-    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-    route = []; routeIdx = 0;
-    document.getElementById('route-section').style.display = 'none';
-    setMode('mark');
-    updateStats();
-    showToast('✅ All clean! Amazing work!');
-    return;
-  }
+            function bindOrientation() {
+                let lastHeading = null;
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
 
-  refreshPoopIcons();
-  updateRouteLine();
-  refreshRouteList();
-  updateStats();
-  const next = route[routeIdx];
-  map.panTo([next.lat, next.lng]);
-  showToast('🧤 Picked up! ' + (route.length - routeIdx) + ' left');
-}
+            function handleOrientation(e) {
+                let heading = null;
 
-function refreshPoopIcons() {
-  poops.forEach(p => {
-    const routePos = route.findIndex(r => r.id === p.id);
-    const isCurrent = routeIdx < route.length && route[routeIdx].id === p.id;
-    const isDone = routePos !== -1 && routePos < routeIdx;
-    const state = isDone ? 'done' : isCurrent ? 'current' : 'default';
-    const label = routePos !== -1 ? routePos + 1 : p.seq;
-    p.marker.setIcon(makePoopIcon(label, state));
-  });
-}
+                if (e.webkitCompassHeading != null) {
+                    // iOS: webkitCompassHeading is degrees from magnetic north, clockwise
+                    heading = e.webkitCompassHeading;
+                } else if (e.absolute && e.alpha != null) {
+                    // Android absolute: alpha is counter-clockwise from north in some implementations
+                    heading = 360 - e.alpha;
+                } else if (e.alpha != null) {
+                    heading = 360 - e.alpha;
+                }
 
-function updateRouteLine() {
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-  if (!userLat || routeIdx >= route.length) return;
-  const pts = [[userLat, userLng]];
-  for (let i = routeIdx; i < route.length; i++) pts.push([route[i].lat, route[i].lng]);
-  routeLine = L.polyline(pts, {
-    color: '#639922', weight: 3, dashArray: '7 5', opacity: 0.85
-  }).addTo(map);
-}
+                if (heading == null) return;
+                heading = ((heading % 360) + 360) % 360;
+                applyHeading(heading);
+            }
 
-function refreshRouteList() {
-  const el = document.getElementById('route-list');
-  el.innerHTML = '';
-  route.forEach((p, i) => {
-    const done = i < routeIdx;
-    const current = i === routeIdx;
-    const d = userLat ? Math.round(dist(userLat, userLng, p.lat, p.lng)) : '?';
-    const div = document.createElement('div');
-    div.className = 'route-item';
-    div.innerHTML = `
-      <div class="route-num ${done ? 'done' : current ? 'current' : ''}">${done ? '✓' : i + 1}</div>
-      <div class="route-name ${done ? 'done' : ''}">Zone #${p.seq}</div>
-      <div class="route-dist">${done ? 'done' : current ? d + 'm away' : d + 'm'}</div>`;
-    if (current) {
-      div.style.background = '#faeeda';
-      div.addEventListener('click', collectCurrent);
-    }
-    el.appendChild(div);
-  });
-}
 
-/* ── UI helpers ── */
-function updateBadge() {
-  const n = poops.length;
-  const b = document.getElementById('badge');
-  b.textContent = n + (n === 1 ? ' zone' : ' zones');
-  b.className = 'header-badge ' + (n > 0 ? '' : 'clean');
-  document.getElementById('stat-count').textContent = n;
-}
+            function setGpsUI(state, label) {
+                document.getElementById('gps-dot').className = 'gps-dot ' + state;
+                document.getElementById('gps-label').textContent = label;
+            }
 
-function updateStats() {
-  const remain = mode === 'pickup' && route.length > 0
-    ? route.length - routeIdx
-    : poops.length;
-  document.getElementById('stat-remain').textContent = remain > 0 ? remain : '—';
+            function onGpsSuccess(pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const acc = Math.round(pos.coords.accuracy || 0);
 
-  let nextDist = '—';
-  if (userLat != null) {
-    if (mode === 'pickup' && routeIdx < route.length) {
-      nextDist = Math.round(dist(userLat, userLng, route[routeIdx].lat, route[routeIdx].lng));
-    } else if (poops.length > 0) {
-      let best = Infinity;
-      poops.forEach(p => { const d = dist(userLat, userLng, p.lat, p.lng); if (d < best) best = d; });
-      nextDist = Math.round(best);
-    }
-  }
-  document.getElementById('stat-dist').innerHTML = nextDist !== '—'
-    ? nextDist + '<span class="stat-unit"> m</span>'
-    : '—';
-}
+                if (!map) initMap(lat, lng);
+                userLat = lat; userLng = lng;
+                userMarker && userMarker.setLatLng([lat, lng]);
+                setGpsUI('ready', '±' + acc + 'm');
 
-function clearAll() {
-  poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
-  poops = []; poopSeq = 0;
-  route = []; routeIdx = 0;
-  if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
-  document.getElementById('route-section').style.display = 'none';
-  setMode('mark');
-  updateBadge();
-  updateStats();
-  saveHash();
-  showToast('🗑️ Map cleared');
-}
+                if (mode === 'pickup' && route.length > 0 && routeIdx < route.length) {
+                    updateRouteLine();
+                    refreshRouteList();
+                    updateStats();
+                    const target = route[routeIdx];
+                    const d = dist(lat, lng, target.lat, target.lng);
+                    if (d < 2.5) collectCurrent();  // within 2.5m → auto-collect
+                } else {
+                    updateStats();
+                }
+            }
 
-/* ── Share ── */
-function toggleShare() {
-  shareOpen = !shareOpen;
-  const sheet = document.getElementById('share-sheet');
-  if (shareOpen) {
-    generateShareUrl();
-    sheet.classList.add('open');
-  } else {
-    sheet.classList.remove('open');
-  }
-}
+            function onGpsError(err) {
+                setGpsUI('error', 'GPS error');
+                // Show error overlay with instructions
+                showGpsDenied(err.code === 1 ? 'permission' : 'timeout');
+            }
 
-function generateShareUrl() {
-  const data = poops.map(p => ({ la: +p.lat.toFixed(7), lo: +p.lng.toFixed(7) }));
-  const enc = btoa(JSON.stringify(data));
-  const url = location.href.split('#')[0] + '#pp=' + enc;
-  document.getElementById('share-url-box').textContent = url;
-  return url;
-}
+            function showGpsDenied(type) {
+                if (map) return; // already have map, skip
+                const msg = type === 'permission'
+                    ? 'Location permission was denied. Enable it in your browser/device settings and reload.'
+                    : 'GPS signal timed out. Make sure you\'re outdoors with a clear sky view.';
+                document.getElementById('map-loading').innerHTML = `
+            <div class="gps-denied">
+              <div class="gps-denied-icon">📍</div>
+              <h2>Location needed</h2>
+              <p>${msg}</p>
+              <button class="gps-denied-btn" onclick="location.reload()">Try again</button>
+            </div>`;
+            }
 
-function copyLink() {
-  const url = generateShareUrl();
-  navigator.clipboard.writeText(url)
-    .then(() => { showToast('📋 Link copied to clipboard!'); toggleShare(); })
-    .catch(() => {
-      // Fallback
-      const ta = document.createElement('textarea');
-      ta.value = url; document.body.appendChild(ta);
-      ta.select(); document.execCommand('copy');
-      document.body.removeChild(ta);
-      showToast('📋 Copied!'); toggleShare();
-    });
-}
+            /* ── Poop CRUD ── */
+            let poopSeq = 0;
+            function addPoop(lat, lng) {
+                poopSeq++;
+                const id = 'p' + Date.now() + '_' + poopSeq;
+                const marker = L.marker([lat, lng], { icon: makePoopIcon(poopSeq, 'default') }).addTo(map);
+                marker.bindPopup(`<b>Poop #${poopSeq}</b><br><small>${lat.toFixed(6)}, ${lng.toFixed(6)}</small>`);
+                marker.on('click', e => {
+                    if (mode === 'pickup') {
+                        const routePos = route.findIndex(r => r.id === id);
+                        if (routePos === routeIdx) collectCurrent();
+                    } else if (mode === 'mark') {
+                        showConfirmDeleteSingle(id);
+                    }
+                });
+                const poop = { id, lat, lng, seq: poopSeq, marker };
+                poops.push(poop);
+                updateBadge();
+                updateStats();
+                saveHash();
+                showToast('💩 Poop #' + poopSeq + ' marked');
+            }
 
-/* ── Hash persistence ── */
-function saveHash() {
-  try {
-    const data = poops.map(p => ({ la: +p.lat.toFixed(7), lo: +p.lng.toFixed(7) }));
-    history.replaceState(null, '', '#pp=' + btoa(JSON.stringify(data)));
-  } catch (e) {}
-}
+            function removePoop(id) {
+                const idx = poops.findIndex(p => p.id === id);
+                if (idx === -1) return;
+                const poop = poops[idx];
+                if (poop.marker && map) map.removeLayer(poop.marker);
+                poops.splice(idx, 1);
+                updateBadge();
+                saveHash();
+            }
 
-function loadFromHash() {
-  try {
-    const h = location.hash;
-    if (!h.startsWith('#pp=')) return false;
-    const data = JSON.parse(atob(h.slice(4)));
-    if (!Array.isArray(data) || data.length === 0) return false;
-    data.forEach(p => addPoop(p.la, p.lo));
-    showToast('📍 Loaded ' + data.length + ' shared zone' + (data.length > 1 ? 's' : '') + '!');
-    return true;
-  } catch (e) { return false; }
-}
+            /* ── Mode ── */
+            function setMode(m) {
+                mode = m;
+                document.getElementById('btn-mark').className = 'action-btn btn-mark' + (m === 'mark' ? ' active' : '');
+                document.getElementById('btn-pickup').className = 'action-btn btn-pickup' + (m === 'pickup' ? ' active' : '');
+                const hint = document.getElementById('map-hint');
+                if (m === 'mark') {
+                    hint.className = 'map-hint hint-mark'; hint.textContent = 'Tap map to mark · tap 💩 to delete';
+                } else {
+                    hint.className = 'map-hint hint-pickup'; hint.textContent = 'Walk to highlighted 💩';
+                }
+            }
 
-/* ── Toast ── */
-function showToast(msg) {
-  const old = document.querySelector('.toast');
-  if (old) old.remove();
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.getElementById('app').appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
+            /* ── Pickup / routing ── */
+            function startPickup() {
+                if (poops.length === 0) { showToast('No poops marked yet!'); return; }
+                if (!gpsReady || userLat == null) { showToast('Waiting for GPS signal…'); return; }
 
-/* ── Close share on backdrop tap ── */
-document.getElementById('share-sheet').addEventListener('click', e => e.stopPropagation());
+                route = buildRoute(userLat, userLng, [...poops]);
+                routeIdx = 0;
+                setMode('pickup');
+                refreshPoopIcons();
+                updateRouteLine();
+                document.getElementById('route-section').style.display = '';
+                refreshRouteList();
+                updateStats();
+                if (route.length > 0) map.setView([route[0].lat, route[0].lng], 20);
+                showToast('Route ready — ' + route.length + ' stops 🗺️');
+            }
 
-/* ── Boot ── */
-if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(pos => {
-    onGpsSuccess(pos);
-    loadFromHash();
-    watchId = navigator.geolocation.watchPosition(onGpsSuccess, () => {}, {
-      enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
-    });
-  }, err => {
-    onGpsError(err);
-  }, { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 });
-} else {
-  showGpsDenied('unsupported');
-}
-</script>
+            function collectCurrent() {
+                if (routeIdx >= route.length) return;
+                const target = route[routeIdx];
+                removePoop(target.id);
+                routeIdx++;
 
-<!-- Service Worker registration -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-</script>
+                if (routeIdx >= route.length) {
+                    // All done!
+                    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+                    route = []; routeIdx = 0;
+                    document.getElementById('route-section').style.display = 'none';
+                    setMode('mark');
+                    updateStats();
+                    showToast('✅ All clean! Amazing work!');
+                    return;
+                }
+
+                refreshPoopIcons();
+                updateRouteLine();
+                refreshRouteList();
+                updateStats();
+                const next = route[routeIdx];
+                map.panTo([next.lat, next.lng]);
+                showToast('🧤 Picked up! ' + (route.length - routeIdx) + ' left');
+            }
+
+            function refreshPoopIcons() {
+                poops.forEach(p => {
+                    const routePos = route.findIndex(r => r.id === p.id);
+                    const isCurrent = routeIdx < route.length && route[routeIdx].id === p.id;
+                    const isDone = routePos !== -1 && routePos < routeIdx;
+                    const state = isDone ? 'done' : isCurrent ? 'current' : 'default';
+                    const label = routePos !== -1 ? routePos + 1 : p.seq;
+                    p.marker.setIcon(makePoopIcon(label, state));
+                });
+            }
+
+            function updateRouteLine() {
+                if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+                if (!userLat || routeIdx >= route.length) return;
+                const pts = [[userLat, userLng]];
+                for (let i = routeIdx; i < route.length; i++) pts.push([route[i].lat, route[i].lng]);
+                routeLine = L.polyline(pts, {
+                    color: '#639922', weight: 3, dashArray: '7 5', opacity: 0.85
+                }).addTo(map);
+            }
+
+            function refreshRouteList() {
+                const el = document.getElementById('route-list');
+                el.innerHTML = '';
+                route.forEach((p, i) => {
+                    const done = i < routeIdx;
+                    const current = i === routeIdx;
+                    const d = userLat ? Math.round(dist(userLat, userLng, p.lat, p.lng)) : '?';
+                    const div = document.createElement('div');
+                    div.className = 'route-item';
+                    div.innerHTML = `
+              <div class="route-num ${done ? 'done' : current ? 'current' : ''}">${done ? '✓' : i + 1}</div>
+              <div class="route-name ${done ? 'done' : ''}">Poop #${p.seq}</div>
+              <div class="route-dist">${done ? 'done' : current ? d + 'm away' : d + 'm'}</div>`;
+                    if (current) {
+                        div.style.background = '#faeeda';
+                        div.addEventListener('click', collectCurrent);
+                    }
+                    el.appendChild(div);
+                });
+            }
+
+            /* ── UI helpers ── */
+            function updateBadge() {
+                const n = poops.length;
+                const b = document.getElementById('badge');
+                b.textContent = n + (n === 1 ? ' poop' : ' poops');
+                b.className = 'header-badge ' + (n > 0 ? '' : 'clean');
+                document.getElementById('stat-count').textContent = n;
+            }
+
+            function updateStats() {
+                const remain = mode === 'pickup' && route.length > 0
+                    ? route.length - routeIdx
+                    : poops.length;
+                document.getElementById('stat-remain').textContent = remain > 0 ? remain : '—';
+
+                let nextDist = '—';
+                if (userLat != null) {
+                    if (mode === 'pickup' && routeIdx < route.length) {
+                        nextDist = Math.round(dist(userLat, userLng, route[routeIdx].lat, route[routeIdx].lng));
+                    } else if (poops.length > 0) {
+                        let best = Infinity;
+                        poops.forEach(p => { const d = dist(userLat, userLng, p.lat, p.lng); if (d < best) best = d; });
+                        nextDist = Math.round(best);
+                    }
+                }
+                document.getElementById('stat-dist').innerHTML = nextDist !== '—'
+                    ? nextDist + '<span class="stat-unit"> m</span>'
+                    : '—';
+            }
+
+            function showConfirmClear() {
+                if (poops.length === 0) { showToast('No poops to clear'); return; }
+                document.getElementById('confirm-count').textContent = poops.length;
+                document.getElementById('confirm-backdrop').classList.add('open');
+            }
+
+            function closeConfirm() {
+                document.getElementById('confirm-backdrop').classList.remove('open');
+            }
+
+            function showConfirmDeleteSingle(id) {
+                const poop = poops.find(p => p.id === id);
+                if (!poop) return;
+                pendingDeleteId = id;
+                document.getElementById('confirm-single-name').textContent = 'Poop #' + poop.seq;
+                document.getElementById('confirm-single-backdrop').classList.add('open');
+            }
+
+            function closeConfirmSingle() {
+                document.getElementById('confirm-single-backdrop').classList.remove('open');
+                pendingDeleteId = null;
+            }
+
+            function confirmDeleteSingle() {
+                if (!pendingDeleteId) return;
+                const poop = poops.find(p => p.id === pendingDeleteId);
+                const seq = poop ? poop.seq : '?';
+                removePoop(pendingDeleteId);
+                // If in pickup mode, rebuild route without the deleted poop
+                if (mode === 'pickup' && route.length > 0) {
+                    route = route.filter(r => r.id !== pendingDeleteId);
+                    if (route.length === 0) {
+                        if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+                        routeIdx = 0;
+                        document.getElementById('route-section').style.display = 'none';
+                        setMode('mark');
+                    } else {
+                        if (routeIdx >= route.length) routeIdx = route.length - 1;
+                        refreshPoopIcons();
+                        updateRouteLine();
+                        refreshRouteList();
+                    }
+                }
+                updateStats();
+                closeConfirmSingle();
+                showToast('🗑️ Poop #' + seq + ' deleted');
+            }
+
+            function confirmClear() {
+                closeConfirm();
+                poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
+                poops = []; poopSeq = 0;
+                route = []; routeIdx = 0;
+                if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
+                document.getElementById('route-section').style.display = 'none';
+                setMode('mark');
+                updateBadge();
+                updateStats();
+                saveHash();
+                showToast('🗑️ Map cleared');
+            }
+
+            /* ── Share ── */
+            function toggleShare() {
+                shareOpen = !shareOpen;
+                const sheet = document.getElementById('share-sheet');
+                if (shareOpen) {
+                    generateShareUrl();
+                    sheet.classList.add('open');
+                } else {
+                    sheet.classList.remove('open');
+                }
+            }
+
+            function generateShareUrl() {
+                const data = poops.map(p => ({ la: +p.lat.toFixed(7), lo: +p.lng.toFixed(7) }));
+                const enc = btoa(JSON.stringify(data));
+                const url = location.href.split('#')[0] + '#pp=' + enc;
+                document.getElementById('share-url-box').textContent = url;
+                return url;
+            }
+
+            function copyLink() {
+                const url = generateShareUrl();
+                navigator.clipboard.writeText(url)
+                    .then(() => { showToast('📋 Link copied to clipboard!'); toggleShare(); })
+                    .catch(() => {
+                        // Fallback
+                        const ta = document.createElement('textarea');
+                        ta.value = url; document.body.appendChild(ta);
+                        ta.select(); document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        showToast('📋 Copied!'); toggleShare();
+                    });
+            }
+
+            /* ── Hash persistence ── */
+            function saveHash() {
+                try {
+                    const data = poops.map(p => ({ la: +p.lat.toFixed(7), lo: +p.lng.toFixed(7) }));
+                    history.replaceState(null, '', '#pp=' + btoa(JSON.stringify(data)));
+                } catch (e) { }
+            }
+
+            function loadFromHash() {
+                try {
+                    const h = location.hash;
+                    if (!h.startsWith('#pp=')) return false;
+                    const data = JSON.parse(atob(h.slice(4)));
+                    if (!Array.isArray(data) || data.length === 0) return false;
+                    data.forEach(p => addPoop(p.la, p.lo));
+                    showToast('📍 Loaded ' + data.length + ' shared poop' + (data.length > 1 ? 's' : '') + '!');
+                    return true;
+                } catch (e) { return false; }
+            }
+
+            /* ── Toast ── */
+            function showToast(msg) {
+                const old = document.querySelector('.toast');
+                if (old) old.remove();
+                const t = document.createElement('div');
+                t.className = 'toast';
+                t.textContent = msg;
+                document.getElementById('app').appendChild(t);
+                setTimeout(() => t.remove(), 2500);
+            }
+
+            /* ── Close share on backdrop tap ── */
+            document.getElementById('share-sheet').addEventListener('click', e => e.stopPropagation());
+
+            /* ── Boot ── */
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    onGpsSuccess(pos);
+                    loadFromHash();
+                    watchId = navigator.geolocation.watchPosition(onGpsSuccess, () => { }, {
+                        enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+                    });
+                }, err => {
+                    onGpsError(err);
+                }, { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 });
+            } else {
+                showGpsDenied('unsupported');
+            }
+        </script>
+
+        <!-- Service Worker registration -->
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('sw.js').catch(() => { });
+                });
+            }
+        </script>
 </body>
 </html>

@@ -962,12 +962,15 @@
                 container.style.display = 'block';
 
                 map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 22, maxNativeZoom: 19
+
+                // Aerial / satellite tile layer (Esri World Imagery — no API key needed)
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 22, maxNativeZoom: 19,
+                    attribution: 'Tiles © Esri'
                 }).addTo(map);
 
                 L.control.zoom({ position: 'topright' }).addTo(map);
-                L.control.attribution({ position: 'bottomleft', prefix: '© OpenStreetMap' }).addTo(map);
+                L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
 
                 userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
 
@@ -977,58 +980,71 @@
                 });
 
                 gpsReady = true;
-                setGpsUI('ready', '±' + Math.round(0) + 'm');
+                setGpsUI('ready', '±0m');
 
                 // Start compass/heading tracking
                 startOrientationTracking();
             }
 
             /* ── Heading-up map rotation ── */
+            // We rotate the map's inner panes rather than the container so Leaflet's
+            // coordinate system stays intact (clicks, bounds, pan all work correctly).
+            // The overlay pane wraps tiles + markers; we counter-rotate the marker pane
+            // so 💩 icons stay upright. The user arrow icon is designed to always point up.
+
+            function rotatePanes(deg) {
+                if (!map) return;
+                const mapEl = map.getContainer();
+                // Rotate all visual panes together
+                ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
+                    const pane = map.getPane(name);
+                    if (pane) {
+                        pane.style.transformOrigin = '50% 50%';
+                        pane.style.transform = `rotate(${-deg}deg)`;
+                        pane.style.transition = 'transform 0.35s cubic-bezier(0.25,0.8,0.25,1)';
+                    }
+                });
+
+                // Counter-rotate poop markers so they stay upright
+                poops.forEach(p => {
+                    if (p.marker) {
+                        const el = p.marker.getElement();
+                        if (el) {
+                            // Leaflet sets its own translate on the element; preserve that, just add our rotation
+                            el.style.transition = 'transform 0.35s cubic-bezier(0.25,0.8,0.25,1)';
+                            // Replace any existing rotate(...) we previously added
+                            el.dataset.ppRot = deg;
+                            // Apply counter-rotation via a wrapper approach using CSS filter on inner div
+                            const inner = el.firstElementChild;
+                            if (inner) inner.style.transform = `rotate(${deg}deg)`;
+                        }
+                    }
+                });
+
+                // User marker: the arrow SVG always points up by design — no rotation needed
+            }
+
             function applyHeading(deg) {
                 if (!map) return;
-                // Low-pass filter to smooth jitter
+                // Low-pass filter to smooth compass jitter
                 if (headingSmoothed === null) {
                     headingSmoothed = deg;
                 } else {
-                    // Shortest-path angular interpolation
                     let diff = deg - headingSmoothed;
                     if (diff > 180) diff -= 360;
                     if (diff < -180) diff += 360;
-                    headingSmoothed += diff * 0.2;
+                    headingSmoothed += diff * 0.15;
                     headingSmoothed = ((headingSmoothed % 360) + 360) % 360;
                 }
 
                 currentHeading = headingSmoothed;
+                rotatePanes(headingSmoothed);
 
-                // Rotate the Leaflet map container
-                const container = map.getContainer();
-                container.style.transform = `rotate(${-headingSmoothed}deg)`;
-                container.style.transformOrigin = '50% 50%';
-                container.style.transition = 'transform 0.4s cubic-bezier(0.25,0.8,0.25,1)';
-
-                // Keep markers upright by counter-rotating the marker pane
-                // The user marker (arrow) intentionally stays pointing up — no counter-rotation needed
-                // Poop markers need to stay upright
-                const markerPane = map.getPane('markerPane');
-                if (markerPane) {
-                    // Counter-rotate the entire marker pane except user marker
-                    // We handle this per icon via CSS class set on the container
-                    container.style.setProperty('--map-heading', headingSmoothed + 'deg');
-                }
-
-                // Counter-rotate poop icons so they stay upright
-                poops.forEach(p => {
-                    if (p.marker) {
-                        const el = p.marker.getElement();
-                        if (el) el.style.transform = el.style.transform.replace(/\s*rotate\([^)]*\)/, '') + ` rotate(${headingSmoothed}deg)`;
-                    }
-                });
-
-                // Update compass — counter-rotate needle so N always points to true north
+                // Compass rose counter-rotates so N always points to true north
                 const compassSvg = document.getElementById('compass-svg');
                 if (compassSvg) compassSvg.style.transform = `rotate(${headingSmoothed}deg)`;
 
-                // Update heading badge
+                // Heading badge
                 const badge = document.getElementById('heading-badge');
                 if (badge) {
                     const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -1043,16 +1059,13 @@
 
             function resetNorth() {
                 if (!map) return;
-                // Reset map rotation to north-up
-                const container = map.getContainer();
-                container.style.transform = 'rotate(0deg)';
-                container.style.transition = 'transform 0.4s cubic-bezier(0.25,0.8,0.25,1)';
+                headingSmoothed = 0;
+                rotatePanes(0);
                 const compassSvg = document.getElementById('compass-svg');
                 if (compassSvg) compassSvg.style.transform = 'rotate(0deg)';
                 const badge = document.getElementById('heading-badge');
                 if (badge) badge.textContent = '0° N';
                 headingUpActive = false;
-                headingSmoothed = 0;
                 const hBadge = document.getElementById('heading-up-badge');
                 if (hBadge) hBadge.classList.remove('active');
                 showToast('🧭 North up');
@@ -1109,8 +1122,11 @@
 
                 if (!map) initMap(lat, lng);
                 userLat = lat; userLng = lng;
-                userMarker && userMarker.setLatLng([lat, lng]);
+                if (userMarker) userMarker.setLatLng([lat, lng]);
                 setGpsUI('ready', '±' + acc + 'm');
+
+                // Keep map centered on user
+                map.panTo([lat, lng], { animate: true, duration: 0.5 });
 
                 if (mode === 'pickup' && route.length > 0 && routeIdx < route.length) {
                     updateRouteLine();
@@ -1161,6 +1177,13 @@
                 });
                 const poop = { id, lat, lng, seq: poopSeq, marker };
                 poops.push(poop);
+                // Apply current map rotation to new marker immediately
+                if (headingSmoothed !== null && headingSmoothed !== 0) {
+                    setTimeout(() => {
+                        const el = marker.getElement();
+                        if (el && el.firstElementChild) el.firstElementChild.style.transform = `rotate(${headingSmoothed}deg)`;
+                    }, 50);
+                }
                 updateBadge();
                 updateStats();
                 saveHash();

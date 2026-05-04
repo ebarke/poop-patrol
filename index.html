@@ -957,33 +957,37 @@
             /* ── Map init ── */
             function initMap(lat, lng) {
                 if (map) return;
-                document.getElementById('map-loading').style.display = 'none';
-                const container = document.getElementById('map-container');
-                container.style.display = 'block';
+                try {
+                    document.getElementById('map-loading').style.display = 'none';
+                    const container = document.getElementById('map-container');
+                    container.style.display = 'block';
 
-                map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
+                    map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
 
-                // Aerial / satellite tile layer (Esri World Imagery — no API key needed)
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                    maxZoom: 22, maxNativeZoom: 19,
-                    attribution: 'Tiles © Esri'
-                }).addTo(map);
+                    // Aerial / satellite tile layer (Esri World Imagery — no API key needed)
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 22, maxNativeZoom: 19,
+                        attribution: 'Tiles © Esri'
+                    }).addTo(map);
 
-                L.control.zoom({ position: 'topright' }).addTo(map);
-                L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
+                    L.control.zoom({ position: 'topright' }).addTo(map);
+                    L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
 
-                userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
+                    userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
 
-                map.on('click', e => {
-                    if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
-                    if (shareOpen) toggleShare();
-                });
+                    map.on('click', e => {
+                        if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
+                        if (shareOpen) toggleShare();
+                    });
 
-                gpsReady = true;
-                setGpsUI('ready', '±0m');
+                    gpsReady = true;
+                    setGpsUI('ready', '±0m');
 
-                // Start compass/heading tracking
-                startOrientationTracking();
+                    // Start compass/heading tracking — wrapped so any failure doesn't break the map
+                    try { startOrientationTracking(); } catch (e) { }
+                } catch (err) {
+                    console.error('Map init error:', err);
+                }
             }
 
             /* ── Heading-up map rotation ── */
@@ -1463,12 +1467,15 @@
                 navigator.geolocation.getCurrentPosition(pos => {
                     onGpsSuccess(pos);
                     loadFromHash();
-                    watchId = navigator.geolocation.watchPosition(onGpsSuccess, () => { }, {
-                        enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+                    watchId = navigator.geolocation.watchPosition(onGpsSuccess, err => {
+                        console.warn('GPS watch error:', err.code, err.message);
+                        setGpsUI('error', 'GPS lost');
+                    }, {
+                        enableHighAccuracy: true, maximumAge: 2000, timeout: 20000
                     });
                 }, err => {
                     onGpsError(err);
-                }, { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 });
+                }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 });
             } else {
                 showGpsDenied('unsupported');
             }

@@ -654,6 +654,38 @@
             cursor: pointer;
         }
 
+        /* ── Map view toggle ── */
+        #map-toggle {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--gray-700);
+            cursor: pointer;
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            -webkit-tap-highlight-color: transparent;
+            transition: box-shadow 0.15s;
+            letter-spacing: 0.2px;
+        }
+
+            #map-toggle:active {
+                box-shadow: var(--shadow-md);
+                transform: scale(0.97);
+            }
+
+            #map-toggle .toggle-icon {
+                font-size: 13px;
+            }
+
         /* ── Compass rose ── */
         #compass-btn {
             position: absolute;
@@ -796,6 +828,9 @@
                 </svg>
             </button>
             <div id="heading-badge">—°</div>
+            <button id="map-toggle" onclick="toggleMapView()" title="Switch map view">
+                <span class="toggle-icon">🛰️</span><span id="map-toggle-label">Aerial</span>
+            </button>
             <div class="gps-status">
                 <div id="gps-dot" class="gps-dot searching"></div>
                 <span id="gps-label">Locating…</span>
@@ -891,6 +926,8 @@
             let headingUpActive = false; // whether heading-up mode is on
             let orientationGranted = false;
             let pendingDeleteId = null;  // id of poop awaiting single-delete confirm
+            let mapView = 'aerial';      // 'aerial' | 'road'
+            let tileLayer = null;
 
             /* ── Haversine distance (metres) ── */
             function dist(lat1, lng1, lat2, lng2) {
@@ -965,11 +1002,11 @@
 
                     map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
 
-                    // Aerial / satellite tile layer (Esri World Imagery — no API key needed)
-                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        maxZoom: 22, maxNativeZoom: 19,
-                        attribution: 'Tiles © Esri'
+                    // Start with aerial view
+                    tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 22, maxNativeZoom: 19, attribution: 'Tiles © Esri'
                     }).addTo(map);
+                    mapView = 'aerial';
 
                     L.control.zoom({ position: 'topright' }).addTo(map);
                     L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
@@ -991,7 +1028,35 @@
                 }
             }
 
-            /* ── Heading-up map rotation ── */
+            /* ── Map view toggle ── */
+            const TILE_LAYERS = {
+                aerial: {
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    opts: { maxZoom: 22, maxNativeZoom: 19, attribution: 'Tiles © Esri' },
+                    icon: '🗺️', label: 'Road'
+                },
+                road: {
+                    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    opts: { maxZoom: 22, maxNativeZoom: 19, attribution: '© OpenStreetMap' },
+                    icon: '🛰️', label: 'Aerial'
+                }
+            };
+
+            function toggleMapView() {
+                if (!map) return;
+                mapView = mapView === 'aerial' ? 'road' : 'aerial';
+                if (tileLayer) map.removeLayer(tileLayer);
+                const cfg = TILE_LAYERS[mapView];
+                tileLayer = L.tileLayer(cfg.url, cfg.opts).addTo(map);
+                tileLayer.bringToBack();
+                // Update button to show what you'll switch TO next
+                const next = TILE_LAYERS[mapView];
+                document.getElementById('map-toggle').querySelector('.toggle-icon').textContent = next.icon;
+                document.getElementById('map-toggle-label').textContent = next.label;
+                showToast(mapView === 'aerial' ? '🛰️ Aerial view' : '🗺️ Road view');
+            }
+
+
             // We rotate the map's inner panes rather than the container so Leaflet's
             // coordinate system stays intact (clicks, bounds, pan all work correctly).
             // The overlay pane wraps tiles + markers; we counter-rotate the marker pane
@@ -1126,9 +1191,13 @@
                 const acc = Math.round(pos.coords.accuracy || 0);
 
                 if (!map) initMap(lat, lng);
+                if (!wakeLock) requestWakeLock(); // keep screen on once GPS is live
                 userLat = lat; userLng = lng;
                 if (userMarker) userMarker.setLatLng([lat, lng]);
-                setGpsUI('ready', '±' + acc + 'm');
+
+                // Show accuracy — colour-code it: green <5m, amber <15m, red ≥15m
+                const accLabel = acc <= 5 ? `±${acc}m ✓` : acc <= 15 ? `±${acc}m` : `±${acc}m ⚠`;
+                setGpsUI('ready', accLabel);
 
                 // Keep map centered on user
                 map.panTo([lat, lng], { animate: true, duration: 0.5 });
@@ -1463,20 +1532,46 @@
             /* ── Close share on backdrop tap ── */
             document.getElementById('share-sheet').addEventListener('click', e => e.stopPropagation());
 
+            /* ── Wake Lock — keep screen on ── */
+            let wakeLock = null;
+
+            async function requestWakeLock() {
+                if (!('wakeLock' in navigator)) return; // not supported
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                } catch (err) {
+                    console.warn('Wake lock failed:', err);
+                }
+            }
+
+            // Re-acquire wake lock when tab becomes visible again (lock releases on hide)
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') requestWakeLock();
+            });
+
             /* ── Boot ── */
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(pos => {
                     onGpsSuccess(pos);
                     loadFromHash();
+                    // maximumAge:0 forces the device to always get a fresh GPS fix
+                    // distanceFilter not available in web API but low maximumAge achieves similar effect
                     watchId = navigator.geolocation.watchPosition(onGpsSuccess, err => {
                         console.warn('GPS watch error:', err.code, err.message);
                         setGpsUI('error', 'GPS lost');
                     }, {
-                        enableHighAccuracy: true, maximumAge: 2000, timeout: 20000
+                        enableHighAccuracy: true,
+                        maximumAge: 0,       // always fresh — no cached positions
+                        timeout: 10000       // fail fast so we retry rather than hang
                     });
                 }, err => {
                     onGpsError(err);
-                }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 });
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 20000,
+                    maximumAge: 0          // fresh fix on load too
+                });
             } else {
                 showGpsDenied('unsupported');
             }

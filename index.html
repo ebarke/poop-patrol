@@ -657,7 +657,7 @@
         /* ── Map view toggle ── */
         #map-toggle {
             position: absolute;
-            bottom: 12px;
+            bottom: 40px;
             left: 12px;
             background: white;
             border: none;
@@ -1013,7 +1013,7 @@
                 }).addTo(map);
                 mapView = 'aerial';
 
-                L.control.zoom({ position: 'bottomright' }).addTo(map);
+                L.control.zoom({ position: 'topright' }).addTo(map);
                 L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
 
                 userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);

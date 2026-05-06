@@ -657,7 +657,7 @@
         /* ── Map view toggle ── */
         #map-toggle {
             position: absolute;
-            bottom: 12px;
+            bottom: 40px;
             left: 12px;
             background: white;
             border: none;
@@ -690,7 +690,7 @@
         #compass-btn {
             position: absolute;
             top: 12px;
-            right: 12px;
+            left: 12px;
             width: 44px;
             height: 44px;
             background: white;
@@ -720,7 +720,7 @@
         #heading-badge {
             position: absolute;
             top: 64px;
-            right: 12px;
+            left: 12px;
             background: white;
             border-radius: 12px;
             box-shadow: var(--shadow-sm);
@@ -736,7 +736,8 @@
         #heading-up-badge {
             position: absolute;
             top: 12px;
-            left: 12px;
+            left: 50%;
+            transform: translateX(-50%);
             background: rgba(45,90,27,0.9);
             border-radius: 12px;
             padding: 3px 10px;
@@ -1012,7 +1013,7 @@
                 }).addTo(map);
                 mapView = 'aerial';
 
-                L.control.zoom({ position: 'topright' }).addTo(map);
+                L.control.zoom({ position: 'bottomright' }).addTo(map);
                 L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
 
                 userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);

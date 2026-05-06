@@ -999,7 +999,12 @@
                 const container = document.getElementById('map-container');
                 container.style.display = 'block';
 
-                map = L.map(container, { zoomControl: false, attributionControl: false }).setView([lat, lng], 19);
+                map = L.map(container, {
+                    zoomControl: false,
+                    attributionControl: false,
+                    center: [lat, lng],
+                    zoom: 19
+                });
 
                 // Start with aerial view
                 tileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -1011,6 +1016,9 @@
                 L.control.attribution({ position: 'bottomleft', prefix: 'Tiles © Esri' }).addTo(map);
 
                 userMarker = L.marker([lat, lng], { icon: makeUserIcon(), zIndexOffset: 1000 }).addTo(map);
+
+                // Ensure map is truly centered after rendering
+                setTimeout(() => map && map.setView([lat, lng], map.getZoom(), { animate: false }), 100);
 
                 map.on('click', e => {
                     if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
@@ -1057,21 +1065,17 @@
         }
 
 
-        // We rotate the map's inner panes rather than the container so Leaflet's
-        // coordinate system stays intact (clicks, bounds, pan all work correctly).
-        // The overlay pane wraps tiles + markers; we counter-rotate the marker pane
-        // so 💩 icons stay upright. The user arrow icon is designed to always point up.
+        /* ── Heading-up map rotation ── */
+        let lastRotateTime = 0;
 
         function rotatePanes(deg) {
             if (!map) return;
-            const mapEl = map.getContainer();
-            // Rotate all visual panes together
             ['tilePane', 'overlayPane', 'shadowPane', 'markerPane', 'tooltipPane', 'popupPane'].forEach(name => {
                 const pane = map.getPane(name);
                 if (pane) {
                     pane.style.transformOrigin = '50% 50%';
                     pane.style.transform = `rotate(${-deg}deg)`;
-                    pane.style.transition = 'transform 0.35s cubic-bezier(0.25,0.8,0.25,1)';
+                    pane.style.transition = 'transform 0.6s cubic-bezier(0.25,0.8,0.25,1)';
                 }
             });
 
@@ -1080,39 +1084,47 @@
                 if (p.marker) {
                     const el = p.marker.getElement();
                     if (el) {
-                        // Leaflet sets its own translate on the element; preserve that, just add our rotation
-                        el.style.transition = 'transform 0.35s cubic-bezier(0.25,0.8,0.25,1)';
-                        // Replace any existing rotate(...) we previously added
-                        el.dataset.ppRot = deg;
-                        // Apply counter-rotation via a wrapper approach using CSS filter on inner div
                         const inner = el.firstElementChild;
-                        if (inner) inner.style.transform = `rotate(${deg}deg)`;
+                        if (inner) {
+                            inner.style.transition = 'transform 0.6s cubic-bezier(0.25,0.8,0.25,1)';
+                            inner.style.transform = `rotate(${deg}deg)`;
+                        }
                     }
                 }
             });
-
-            // User marker: the arrow SVG always points up by design — no rotation needed
         }
 
         function applyHeading(deg) {
             if (!map) return;
-            // Low-pass filter to smooth compass jitter
+
+            // Strong low-pass filter (alpha=0.08) — very smooth, slow to react to noise
             if (headingSmoothed === null) {
                 headingSmoothed = deg;
             } else {
                 let diff = deg - headingSmoothed;
                 if (diff > 180) diff -= 360;
                 if (diff < -180) diff += 360;
-                headingSmoothed += diff * 0.15;
+                headingSmoothed += diff * 0.08;
                 headingSmoothed = ((headingSmoothed % 360) + 360) % 360;
             }
+
+            // Deadband: ignore tiny changes under 1.5° to stop jitter when standing still
+            if (Math.abs(deg - headingSmoothed) < 1.5 && headingUpActive) return;
+
+            // Throttle: max one rotation update per 150ms
+            const now = Date.now();
+            if (now - lastRotateTime < 150) return;
+            lastRotateTime = now;
 
             currentHeading = headingSmoothed;
             rotatePanes(headingSmoothed);
 
             // Compass rose counter-rotates so N always points to true north
             const compassSvg = document.getElementById('compass-svg');
-            if (compassSvg) compassSvg.style.transform = `rotate(${headingSmoothed}deg)`;
+            if (compassSvg) {
+                compassSvg.style.transition = 'transform 0.6s cubic-bezier(0.25,0.8,0.25,1)';
+                compassSvg.style.transform = `rotate(${headingSmoothed}deg)`;
+            }
 
             // Heading badge
             const badge = document.getElementById('heading-badge');
@@ -1190,17 +1202,24 @@
             const lng = pos.coords.longitude;
             const acc = Math.round(pos.coords.accuracy || 0);
 
-            if (!map) initMap(lat, lng);
-            if (!wakeLock) requestWakeLock(); // keep screen on once GPS is live
             userLat = lat; userLng = lng;
-            if (userMarker) userMarker.setLatLng([lat, lng]);
+            if (!wakeLock) requestWakeLock();
 
-            // Show accuracy — colour-code it: green <5m, amber <15m, red ≥15m
+            if (!map) {
+                initMap(lat, lng);
+            } else {
+                if (userMarker) userMarker.setLatLng([lat, lng]);
+                // Only re-center if user has moved more than 3m to avoid jitter
+                const prev = map.getCenter();
+                const moved = dist(lat, lng, prev.lat, prev.lng);
+                if (moved > 3) {
+                    map.panTo([lat, lng], { animate: true, duration: 0.8, easeLinearity: 0.5 });
+                }
+            }
+
+            // Colour-code accuracy: green <5m, amber <15m, red ≥15m
             const accLabel = acc <= 5 ? `±${acc}m ✓` : acc <= 15 ? `±${acc}m` : `±${acc}m ⚠`;
             setGpsUI('ready', accLabel);
-
-            // Keep map centered on user
-            map.panTo([lat, lng], { animate: true, duration: 0.5 });
 
             if (mode === 'pickup' && route.length > 0 && routeIdx < route.length) {
                 updateRouteLine();
@@ -1208,7 +1227,7 @@
                 updateStats();
                 const target = route[routeIdx];
                 const d = dist(lat, lng, target.lat, target.lng);
-                if (d < 2.5) collectCurrent();  // within 2.5m → auto-collect
+                if (d < 2.5) collectCurrent();
             } else {
                 updateStats();
             }

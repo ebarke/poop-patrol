@@ -1,4 +1,4 @@
-const CACHE = 'poop-patrol-v2';
+const CACHE = 'poop-patrol-v3';
 const ASSETS = [
     '/',
     '/index.html',
@@ -18,14 +18,19 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
     e.waitUntil(
         caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+            Promise.all(keys.filter(k => k !== CACHE && k !== CACHE + '-tiles').map(k => caches.delete(k)))
         ).then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', e => {
-    // Tile requests: network first, cache fallback
-    if (e.request.url.includes('arcgisonline.com')) {
+    // OSRM routing: always network, never cache (routes must be fresh)
+    if (e.request.url.includes('router.project-osrm.org')) {
+        e.respondWith(fetch(e.request));
+        return;
+    }
+    // Tile requests: network first, cache fallback for offline use
+    if (e.request.url.includes('arcgisonline.com') || e.request.url.includes('tile.openstreetmap.org')) {
         e.respondWith(
             fetch(e.request).then(res => {
                 const clone = res.clone();

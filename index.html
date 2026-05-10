@@ -1429,14 +1429,77 @@
             });
         }
 
-        function updateRouteLine() {
+        /* ── Routing via OSRM (pedestrian, routes around obstacles) ── */
+        let routingAbort = null; // AbortController for in-flight OSRM requests
+
+        function decodePolyline(str) {
+            // Decode Google-encoded polyline (used by OSRM)
+            let index = 0, lat = 0, lng = 0;
+            const coords = [];
+            while (index < str.length) {
+                let b, shift = 0, result = 0;
+                do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+                lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+                shift = 0; result = 0;
+                do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+                lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+                coords.push([lat / 1e5, lng / 1e5]);
+            }
+            return coords;
+        }
+
+        async function fetchOsrmRoute(fromLat, fromLng, toLat, toLng) {
+            const url = `https://router.project-osrm.org/route/v1/foot/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=polyline`;
+            const ctrl = new AbortController();
+            routingAbort = ctrl;
+            const res = await fetch(url, { signal: ctrl.signal });
+            const data = await res.json();
+            if (data.code !== 'Ok' || !data.routes.length) return null;
+            return decodePolyline(data.routes[0].geometry);
+        }
+
+        async function updateRouteLine() {
             if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
             if (!userLat || routeIdx >= route.length) return;
-            const pts = [[userLat, userLng]];
-            for (let i = routeIdx; i < route.length; i++) pts.push([route[i].lat, route[i].lng]);
-            routeLine = L.polyline(pts, {
-                color: '#639922', weight: 3, dashArray: '7 5', opacity: 0.85
-            }).addTo(map);
+
+            // Cancel any previous in-flight routing request
+            if (routingAbort) { try { routingAbort.abort(); } catch (e) { } routingAbort = null; }
+
+            const target = route[routeIdx];
+
+            // Draw a faint straight-line placeholder immediately while we fetch
+            const placeholder = L.polyline(
+                [[userLat, userLng], [target.lat, target.lng]],
+                { color: '#639922', weight: 2, dashArray: '5 7', opacity: 0.4 }
+            ).addTo(map);
+
+            try {
+                const coords = await fetchOsrmRoute(userLat, userLng, target.lat, target.lng);
+                // Remove placeholder now we have the real route (or if it failed)
+                map.removeLayer(placeholder);
+
+                if (coords && coords.length > 1) {
+                    // Real routed path — solid line
+                    routeLine = L.polyline(coords, {
+                        color: '#2d7dd2', weight: 4, opacity: 0.85, lineJoin: 'round', lineCap: 'round'
+                    }).addTo(map);
+                } else {
+                    // OSRM returned nothing useful — fall back to straight line with warning style
+                    routeLine = L.polyline(
+                        [[userLat, userLng], [target.lat, target.lng]],
+                        { color: '#639922', weight: 3, dashArray: '7 5', opacity: 0.85 }
+                    ).addTo(map);
+                }
+            } catch (err) {
+                // Fetch failed (offline, aborted, etc) — keep straight-line fallback
+                map.removeLayer(placeholder);
+                if (err.name !== 'AbortError') {
+                    routeLine = L.polyline(
+                        [[userLat, userLng], [target.lat, target.lng]],
+                        { color: '#639922', weight: 3, dashArray: '7 5', opacity: 0.85 }
+                    ).addTo(map);
+                }
+            }
         }
 
         function refreshRouteList() {

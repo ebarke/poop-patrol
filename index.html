@@ -1058,9 +1058,13 @@
                     document.getElementById('recenter-btn').classList.add('visible');
                 });
 
+                // Tap anywhere on map = drop poop at USER'S current GPS location
                 map.on('click', e => {
-                    if (mode === 'mark') addPoop(e.latlng.lat, e.latlng.lng);
-                    if (shareOpen) toggleShare();
+                    if (shareOpen) { toggleShare(); return; }
+                    if (mode === 'mark') {
+                        if (userLat == null) { showToast('Waiting for GPS…'); return; }
+                        addPoop(userLat, userLng);
+                    }
                 });
 
                 gpsReady = true;
@@ -1265,9 +1269,20 @@
                 initMap(lat, lng);
             } else {
                 if (userMarker) userMarker.setLatLng([lat, lng]);
-                // Always keep user centered unless they've manually panned away
+                // Only re-center if not manually panned AND user marker is near the edge of the viewport
                 if (!userPanned) {
-                    map.setView([lat, lng], map.getZoom(), { animate: false });
+                    const bounds = map.getBounds();
+                    const latSpan = bounds.getNorth() - bounds.getSouth();
+                    const lngSpan = bounds.getEast() - bounds.getWest();
+                    const marginLat = latSpan * 0.25;
+                    const marginLng = lngSpan * 0.25;
+                    const innerBounds = L.latLngBounds(
+                        [bounds.getSouth() + marginLat, bounds.getWest() + marginLng],
+                        [bounds.getNorth() - marginLat, bounds.getEast() - marginLng]
+                    );
+                    if (!innerBounds.contains([lat, lng])) {
+                        map.panTo([lat, lng], { animate: true, duration: 0.5, easeLinearity: 0.5, noMoveStart: true });
+                    }
                 }
             }
 
@@ -1354,7 +1369,7 @@
             document.getElementById('btn-pickup').className = 'action-btn btn-pickup' + (m === 'pickup' ? ' active' : '');
             const hint = document.getElementById('map-hint');
             if (m === 'mark') {
-                hint.className = 'map-hint hint-mark'; hint.textContent = 'Tap map to mark · tap 💩 to delete';
+                hint.className = 'map-hint hint-mark'; hint.textContent = 'Tap map to mark your location · tap 💩 to delete';
             } else {
                 hint.className = 'map-hint hint-pickup'; hint.textContent = 'Walk to highlighted 💩';
             }

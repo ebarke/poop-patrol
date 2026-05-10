@@ -12,6 +12,10 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
@@ -786,6 +790,307 @@
             transition: transform 0.4s cubic-bezier(0.25,0.8,0.25,1);
         }
 
+        /* ── Auth screen ── */
+        #auth-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9000;
+            background: var(--green-dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 24px;
+            gap: 0;
+        }
+
+            #auth-screen.hidden {
+                display: none;
+            }
+
+        .auth-logo {
+            font-size: 64px;
+            margin-bottom: 8px;
+        }
+
+        .auth-title {
+            font-size: 26px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .auth-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.65);
+            margin-bottom: 32px;
+        }
+
+        .auth-card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px 20px;
+            width: 100%;
+            max-width: 340px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .auth-tab-row {
+            display: flex;
+            gap: 0;
+            margin-bottom: 4px;
+            border-bottom: 1.5px solid #f3f4f6;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 8px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #9ca3af;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1.5px;
+        }
+
+            .auth-tab.active {
+                color: var(--green-dark);
+                border-bottom-color: var(--green-dark);
+            }
+
+        .auth-input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1.5px solid #e5e7eb;
+            font-size: 14px;
+            font-family: var(--font);
+            background: #f9fafb;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+            .auth-input:focus {
+                border-color: var(--green-mid);
+            }
+
+        .auth-btn {
+            width: 100%;
+            padding: 13px;
+            border-radius: 10px;
+            border: none;
+            background: var(--green-dark);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+            .auth-btn:active {
+                opacity: 0.8;
+            }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #9ca3af;
+            font-size: 11px;
+        }
+
+            .auth-divider::before, .auth-divider::after {
+                content: '';
+                flex: 1;
+                height: 1px;
+                background: #f3f4f6;
+            }
+
+        .auth-google-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1.5px solid #e5e7eb;
+            background: white;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.15s;
+        }
+
+            .auth-google-btn:active {
+                background: #f9fafb;
+            }
+
+        .auth-error {
+            font-size: 12px;
+            color: var(--red-mid);
+            text-align: center;
+            min-height: 16px;
+            margin-top: -4px;
+        }
+
+        /* ── Session modal ── */
+        #session-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 8000;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+            #session-modal.hidden {
+                display: none;
+            }
+
+        .session-sheet {
+            background: white;
+            border-radius: 20px 20px 0 0;
+            padding: 24px 20px 40px;
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .session-title {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .session-sub {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: -8px;
+        }
+
+        .session-code-display {
+            background: var(--green-bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+            .session-code-display .code {
+                font-size: 34px;
+                font-weight: 800;
+                letter-spacing: 8px;
+                color: var(--green-dark);
+            }
+
+            .session-code-display .code-label {
+                font-size: 11px;
+                color: var(--green-mid);
+                margin-top: 4px;
+            }
+
+        .session-join-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .session-join-input {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1.5px solid #e5e7eb;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            font-family: monospace;
+            text-align: center;
+            outline: none;
+        }
+
+            .session-join-input:focus {
+                border-color: var(--green-mid);
+            }
+
+        .session-member-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .session-member {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #f9fafb;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .session-member-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--green-dark);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .session-leave-btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1.5px solid var(--red-mid);
+            background: none;
+            color: var(--red-mid);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: var(--font);
+            align-self: flex-start;
+        }
+
+        #user-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            flex-shrink: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #session-indicator {
+            font-size: 10px;
+            font-weight: 600;
+            background: var(--amber-light);
+            color: var(--amber-dark);
+            border-radius: 8px;
+            padding: 2px 7px;
+            margin-left: 2px;
+        }
+
         /* Shimmer for loading */
         .map-loading {
             position: absolute;
@@ -828,11 +1133,14 @@
             <div class="header-left">
                 <span class="header-logo">💩</span>
                 <div>
-                    <div class="header-title">Poop Patrol</div>
-                    <div class="header-sub">GPS-guided yard cleanup</div>
+                    <div class="header-title">Poop Patrol <span id="session-indicator" style="display:none"></span></div>
+                    <div class="header-sub" id="header-sub">GPS-guided yard cleanup</div>
                 </div>
             </div>
-            <span id="badge" class="header-badge clean">0 poops</span>
+            <div style="display:flex;align-items:center;gap:8px">
+                <span id="badge" class="header-badge clean">0 poops</span>
+                <button id="user-avatar" onclick="openSessionModal()" title="Account & sharing">?</button>
+            </div>
         </div>
 
         <!-- Map -->
@@ -931,6 +1239,61 @@
                 <div class="confirm-btns">
                     <button class="confirm-btn" onclick="closeConfirmSingle()">Cancel</button>
                     <button class="confirm-btn danger" onclick="confirmDeleteSingle()">Delete</button>
+                </div>
+            </div>
+        </div>
+        <!-- Auth screen -->
+        <div id="auth-screen">
+            <div class="auth-logo">💩</div>
+            <div class="auth-title">Poop Patrol</div>
+            <div class="auth-sub">Sign in to save and share your patrol</div>
+            <div class="auth-card">
+                <div class="auth-tab-row">
+                    <button class="auth-tab active" onclick="switchAuthTab('signin')">Sign in</button>
+                    <button class="auth-tab" onclick="switchAuthTab('signup')">Create account</button>
+                </div>
+                <input class="auth-input" id="auth-email" type="email" placeholder="Email" autocomplete="email" />
+                <input class="auth-input" id="auth-password" type="password" placeholder="Password" autocomplete="current-password" />
+                <input class="auth-input" id="auth-name" type="text" placeholder="Your name" autocomplete="name" style="display:none" />
+                <div class="auth-error" id="auth-error"></div>
+                <button class="auth-btn" id="auth-submit-btn" onclick="authSubmit()">Sign in</button>
+                <div class="auth-divider">or</div>
+                <button class="auth-google-btn" onclick="authGoogle()">
+                    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" /><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" /><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" /><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" /></svg>
+                    Continue with Google
+                </button>
+            </div>
+        </div>
+
+        <!-- Session modal -->
+        <div id="session-modal" class="hidden" onclick="closeSessionModal()">
+            <div class="session-sheet" onclick="event.stopPropagation()">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="session-title">👤 <span id="session-user-name">My Account</span></div>
+                    <button onclick="authSignOut()" style="background:none;border:none;font-size:12px;color:#9ca3af;cursor:pointer;font-family:var(--font)">Sign out</button>
+                </div>
+
+                <!-- Active session view -->
+                <div id="session-active-view" style="display:none;flex-direction:column;gap:14px">
+                    <div class="session-sub">You're in a shared session</div>
+                    <div class="session-code-display">
+                        <div class="code" id="active-session-code">------</div>
+                        <div class="code-label">Share this code with others to join</div>
+                    </div>
+                    <div class="session-member-list" id="session-member-list"></div>
+                    <button class="session-leave-btn" onclick="leaveSession()">Leave session</button>
+                </div>
+
+                <!-- No session view -->
+                <div id="session-no-view" style="flex-direction:column;gap:14px">
+                    <div class="session-sub">Collaborate with others in real time</div>
+                    <button class="auth-btn" onclick="createSession()" style="margin-top:0">🤝 Create shared session</button>
+                    <div class="auth-divider">or join existing</div>
+                    <div class="session-join-row">
+                        <input class="session-join-input" id="join-code-input" maxlength="6" placeholder="ABC123" oninput="this.value=this.value.toUpperCase()" />
+                        <button class="auth-btn" style="width:auto;padding:12px 18px" onclick="joinSession()">Join</button>
+                    </div>
+                    <div class="auth-error" id="session-error"></div>
                 </div>
             </div>
         </div>
@@ -1649,8 +2012,9 @@
                 });
         }
 
-        /* ── Hash persistence ── */
+        /* ── Hash persistence (fallback when not signed in) ── */
         function saveHash() {
+            if (currentUser) return; // Firebase handles persistence when signed in
             try {
                 const data = poops.map(p => ({ la: +p.lat.toFixed(7), lo: +p.lng.toFixed(7) }));
                 history.replaceState(null, '', '#pp=' + btoa(JSON.stringify(data)));
@@ -1726,6 +2090,336 @@
         } else {
             showGpsDenied('unsupported');
         }
+    </script>
+
+    <!-- Firebase config & auth -->
+    <script>
+        // ─────────────────────────────────────────────────
+        // PASTE YOUR FIREBASE CONFIG HERE
+        // Get it from: Firebase Console → Project Settings → Your apps → Web
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyDg_0Ig5G4pzTodhj6HF9IdsaKggr1tNcM",
+            authDomain: "poop-patrol-9906d.firebaseapp.com",
+            projectId: "poop-patrol-9906d",
+            storageBucket: "poop-patrol-9906d.firebasestorage.app",
+            messagingSenderId: "353475116950",
+            appId: "1:353475116950:web:5590a97cde93ebb102e7b7",
+            measurementId: "G-PVQLFNWP9G"
+        };
+        // ─────────────────────────────────────────────────
+
+        let fbApp, fbAuth, fbDb;
+        let currentUser = null;
+        let currentSessionId = null;
+        let poopsUnsubscribe = null;  // Firestore real-time listener
+
+        function initFirebase() {
+            try {
+                fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+                fbAuth = firebase.auth();
+                fbDb = firebase.firestore();
+
+                fbAuth.onAuthStateChanged(user => {
+                    if (user) {
+                        currentUser = user;
+                        onSignedIn(user);
+                    } else {
+                        currentUser = null;
+                        onSignedOut();
+                    }
+                });
+            } catch (e) {
+                console.error('Firebase init failed:', e);
+                // If config is missing/invalid, skip auth and run in local-only mode
+                document.getElementById('auth-screen').classList.add('hidden');
+            }
+        }
+
+        /* ── Auth UI ── */
+        let authMode = 'signin';
+
+        function switchAuthTab(mode) {
+            authMode = mode;
+            document.querySelectorAll('.auth-tab').forEach((t, i) => t.classList.toggle('active', i === (mode === 'signin' ? 0 : 1)));
+            document.getElementById('auth-name').style.display = mode === 'signup' ? '' : 'none';
+            document.getElementById('auth-submit-btn').textContent = mode === 'signin' ? 'Sign in' : 'Create account';
+            document.getElementById('auth-error').textContent = '';
+        }
+
+        function setAuthError(msg) { document.getElementById('auth-error').textContent = msg; }
+
+        function friendlyAuthError(code) {
+            const map = {
+                'auth/user-not-found': 'No account found with that email.',
+                'auth/wrong-password': 'Incorrect password.',
+                'auth/email-already-in-use': 'An account already exists with that email.',
+                'auth/weak-password': 'Password must be at least 6 characters.',
+                'auth/invalid-email': 'Please enter a valid email address.',
+                'auth/too-many-requests': 'Too many attempts. Please try again later.',
+                'auth/popup-closed-by-user': '',
+            };
+            return map[code] || 'Something went wrong. Please try again.';
+        }
+
+        async function authSubmit() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value.trim();
+            setAuthError('');
+            if (!email || !password) { setAuthError('Please enter email and password.'); return; }
+            try {
+                if (authMode === 'signin') {
+                    await fbAuth.signInWithEmailAndPassword(email, password);
+                } else {
+                    if (!name) { setAuthError('Please enter your name.'); return; }
+                    const cred = await fbAuth.createUserWithEmailAndPassword(email, password);
+                    await cred.user.updateProfile({ displayName: name });
+                }
+            } catch (e) { setAuthError(friendlyAuthError(e.code)); }
+        }
+
+        async function authGoogle() {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                await fbAuth.signInWithPopup(provider);
+            } catch (e) { setAuthError(friendlyAuthError(e.code)); }
+        }
+
+        async function authSignOut() {
+            if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
+            if (currentSessionId) await leaveSession(true);
+            await fbAuth.signOut();
+            closeSessionModal();
+        }
+
+        /* ── Signed-in / signed-out state ── */
+        function onSignedIn(user) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            // Update avatar with user initial
+            const initial = (user.displayName || user.email || '?')[0].toUpperCase();
+            document.getElementById('user-avatar').textContent = initial;
+            document.getElementById('session-user-name').textContent = user.displayName || user.email;
+            document.getElementById('header-sub').textContent = user.displayName || user.email;
+            // Load user's poops from Firestore
+            loadUserPoops();
+        }
+
+        function onSignedOut() {
+            document.getElementById('auth-screen').classList.remove('hidden');
+            // Clear map state
+            if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
+            poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
+            poops = []; poopSeq = 0;
+            updateBadge(); updateStats();
+        }
+
+        /* ── Firestore poop sync ── */
+        function poopsCollection() {
+            if (!currentUser) return null;
+            if (currentSessionId) {
+                return fbDb.collection('sessions').doc(currentSessionId).collection('poops');
+            }
+            return fbDb.collection('users').doc(currentUser.uid).collection('poops');
+        }
+
+        function loadUserPoops() {
+            if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
+            const col = poopsCollection();
+            if (!col) return;
+
+            // Remove all current markers
+            poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
+            poops = []; poopSeq = 0;
+            updateBadge();
+
+            // Real-time listener
+            poopsUnsubscribe = col.orderBy('seq').onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === 'added') {
+                        const d = change.doc.data();
+                        // Avoid duplicates
+                        if (poops.find(p => p.id === change.doc.id)) return;
+                        const p = addPoopLocal(d.lat, d.lng, change.doc.id, d.seq);
+                        if (d.seq >= poopSeq) poopSeq = d.seq + 1;
+                    }
+                    if (change.type === 'removed') {
+                        removePoopLocal(change.doc.id);
+                    }
+                });
+                updateBadge(); updateStats();
+            });
+        }
+
+        function addPoopLocal(lat, lng, id, seq) {
+            // Renders marker without saving to Firestore (used by snapshot listener)
+            const icon = makePoopIcon(seq, 'default');
+            const marker = L.marker([lat, lng], { icon }).addTo(map);
+            marker.on('click', () => { if (mode === 'mark') showConfirmDeleteSingle(id); });
+            // Apply current rotation
+            if (headingSmoothed) {
+                setTimeout(() => {
+                    const el = marker.getElement();
+                    if (el && el.firstElementChild) el.firstElementChild.style.transform = `rotate(${headingSmoothed}deg)`;
+                }, 50);
+            }
+            const poop = { id, lat, lng, seq, marker };
+            poops.push(poop);
+            return poop;
+        }
+
+        function removePoopLocal(id) {
+            const idx = poops.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            if (poops[idx].marker && map) map.removeLayer(poops[idx].marker);
+            poops.splice(idx, 1);
+        }
+
+        /* ── Session management ── */
+        function openSessionModal() {
+            if (!currentUser) return;
+            const noView = document.getElementById('session-no-view');
+            const activeView = document.getElementById('session-active-view');
+            if (currentSessionId) {
+                noView.style.display = 'none';
+                activeView.style.display = 'flex';
+                document.getElementById('active-session-code').textContent = currentSessionId;
+                loadSessionMembers();
+            } else {
+                noView.style.display = 'flex';
+                activeView.style.display = 'none';
+                document.getElementById('session-error').textContent = '';
+                document.getElementById('join-code-input').value = '';
+            }
+            document.getElementById('session-modal').classList.remove('hidden');
+        }
+
+        function closeSessionModal() {
+            document.getElementById('session-modal').classList.add('hidden');
+        }
+
+        function randCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+        }
+
+        async function createSession() {
+            if (!currentUser) return;
+            const code = randCode();
+            try {
+                await fbDb.collection('sessions').doc(code).set({
+                    createdBy: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    members: { [currentUser.uid]: currentUser.displayName || currentUser.email }
+                });
+                await joinSessionById(code);
+            } catch (e) {
+                document.getElementById('session-error').textContent = 'Failed to create session.';
+            }
+        }
+
+        async function joinSession() {
+            const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (code.length !== 6) { document.getElementById('session-error').textContent = 'Enter a 6-character code.'; return; }
+            const doc = await fbDb.collection('sessions').doc(code).get();
+            if (!doc.exists) { document.getElementById('session-error').textContent = 'Session not found.'; return; }
+            await joinSessionById(code);
+        }
+
+        async function joinSessionById(code) {
+            if (!currentUser) return;
+            // Save current private poops first, then switch to session
+            if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
+            // Clear local markers
+            poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
+            poops = []; poopSeq = 0;
+            // Add self to members
+            await fbDb.collection('sessions').doc(code).update({
+                [`members.${currentUser.uid}`]: currentUser.displayName || currentUser.email
+            });
+            currentSessionId = code;
+            document.getElementById('session-indicator').textContent = '👥 ' + code;
+            document.getElementById('session-indicator').style.display = '';
+            loadUserPoops();
+            closeSessionModal();
+            showToast('👥 Joined session ' + code);
+        }
+
+        async function leaveSession(silent = false) {
+            if (!currentSessionId || !currentUser) return;
+            await fbDb.collection('sessions').doc(currentSessionId).update({
+                [`members.${currentUser.uid}`]: firebase.firestore.FieldValue.delete()
+            });
+            currentSessionId = null;
+            document.getElementById('session-indicator').style.display = 'none';
+            // Switch back to private poops
+            if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
+            poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
+            poops = []; poopSeq = 0;
+            loadUserPoops();
+            if (!silent) { closeSessionModal(); showToast('Left shared session'); }
+        }
+
+        async function loadSessionMembers() {
+            if (!currentSessionId) return;
+            const doc = await fbDb.collection('sessions').doc(currentSessionId).get();
+            if (!doc.exists) return;
+            const members = doc.data().members || {};
+            const list = document.getElementById('session-member-list');
+            list.innerHTML = '';
+            Object.entries(members).forEach(([uid, name]) => {
+                const initial = (name || '?')[0].toUpperCase();
+                const div = document.createElement('div');
+                div.className = 'session-member';
+                div.innerHTML = `<div class="session-member-avatar">${initial}</div><span>${name}${uid === currentUser.uid ? ' (you)' : ''}</span>`;
+                list.appendChild(div);
+            });
+        }
+
+        /* ── Override addPoop to save to Firestore ── */
+        const _origAddPoop = addPoop;
+        window.addPoop = async function (lat, lng) {
+            if (!currentUser || !map) { showToast('Sign in to mark poops'); return; }
+            const col = poopsCollection();
+            if (!col) return;
+            poopSeq++;
+            const seq = poopSeq;
+            try {
+                await col.add({ lat, lng, seq, uid: currentUser.uid, ts: firebase.firestore.FieldValue.serverTimestamp() });
+                // Snapshot listener handles rendering
+            } catch (e) { console.error('Save poop failed:', e); poopSeq--; }
+        };
+
+        /* ── Override removePoop to delete from Firestore ── */
+        const _origRemovePoop = removePoop;
+        window.removePoop = async function (id) {
+            removePoopLocal(id);  // Optimistic local remove
+            updateBadge(); saveHash();
+            const col = poopsCollection();
+            if (!col) return;
+            try { await col.doc(id).delete(); } catch (e) { console.error('Delete poop failed:', e); }
+        };
+
+        /* ── Override confirmClear to delete all from Firestore ── */
+        const _origConfirmClear = confirmClear;
+        window.confirmClear = async function () {
+            closeConfirm();
+            const col = poopsCollection();
+            if (col) {
+                const snap = await col.get();
+                const batch = fbDb.batch();
+                snap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            }
+            // Local state cleared by snapshot listener; also reset route
+            route = []; routeIdx = 0;
+            if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
+            document.getElementById('route-section').style.display = 'none';
+            setMode('mark');
+            showToast('🧹 Map cleared');
+        };
+
+        // Boot Firebase
+        initFirebase();
     </script>
 
     <!-- Service Worker registration -->

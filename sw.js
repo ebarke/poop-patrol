@@ -1,4 +1,4 @@
-const CACHE = 'poop-patrol-v3';
+const CACHE = 'poop-patrol-v4';
 const ASSETS = [
     '/',
     '/index.html',
@@ -24,8 +24,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-    // OSRM routing: always network, never cache (routes must be fresh)
-    if (e.request.url.includes('router.project-osrm.org')) {
+    // Overpass water queries: always network, never cache (must be fresh)
+    if (e.request.url.includes('overpass-api.de')) {
         e.respondWith(fetch(e.request));
         return;
     }

@@ -1149,7 +1149,7 @@
                 <div class="map-loading-icon">📡</div>
                 <div class="map-loading-text">Acquiring GPS signal…</div>
             </div>
-            <div id="map-rotate-wrapper" style="position:absolute;inset:0;transform-origin:50% 50%">
+            <div id="map-rotate-wrapper" style="position:absolute;width:150%;height:150%;top:-25%;left:-25%;transform-origin:50% 50%;">
                 <div id="map-container" style="height:100%;width:100%;display:none"></div>
             </div>
             <div id="map-hint" class="map-hint hint-mark">Tap map to mark poop</div>
@@ -1500,25 +1500,31 @@
         function applyHeading(rawDeg) {
             if (!map) return;
 
-            // Strong low-pass filter — alpha 0.07 is very smooth
+            // Deadband on RAW input — if the raw compass hasn't moved much, don't even smooth
+            if (lastAppliedHeading !== null) {
+                let rawDiff = rawDeg - lastAppliedHeading;
+                if (rawDiff > 180) rawDiff -= 360;
+                if (rawDiff < -180) rawDiff += 360;
+                if (Math.abs(rawDiff) < 3.0) return; // ignore jitter under 3°
+            }
+
+            // Throttle: max one update per 250ms
+            const now = Date.now();
+            if (now - lastRotateTime < 250) return;
+            lastRotateTime = now;
+
+            // Strong low-pass filter — alpha 0.12
             if (headingSmoothed === null) {
                 headingSmoothed = rawDeg;
             } else {
                 let diff = rawDeg - headingSmoothed;
                 if (diff > 180) diff -= 360;
                 if (diff < -180) diff += 360;
-                headingSmoothed += diff * 0.07;
+                headingSmoothed += diff * 0.12;
                 headingSmoothed = ((headingSmoothed % 360) + 360) % 360;
             }
 
-            // Deadband: skip update if heading has changed less than 2° since last applied
-            if (lastAppliedHeading !== null && Math.abs(headingSmoothed - lastAppliedHeading) < 2.0) return;
-
-            // Throttle: max one update per 200ms
-            const now = Date.now();
-            if (now - lastRotateTime < 200) return;
-            lastRotateTime = now;
-            lastAppliedHeading = headingSmoothed;
+            lastAppliedHeading = rawDeg; // track raw, not smoothed
             currentHeading = headingSmoothed;
 
             rotatePanes(headingSmoothed);

@@ -1480,6 +1480,9 @@
                 gpsReady = true;
                 setGpsUI('ready', '±0m');
 
+                // Render any pins that arrived from Firestore before map was ready
+                flushPendingPins();
+
                 // Start compass/heading tracking — wrapped so any failure doesn't break the map
                 try { startOrientationTracking(); } catch (e) { }
             } catch (err) {
@@ -2479,36 +2482,71 @@ out geom;`;
             return fbDb.collection('users').doc(currentUser.uid).collection('poops');
         }
 
+        /* ── Firestore poop sync ── */
+        function poopsCollection() {
+            if (!currentUser) return null;
+            if (currentSessionId) {
+                return fbDb.collection('sessions').doc(currentSessionId).collection('poops');
+            }
+            return fbDb.collection('users').doc(currentUser.uid).collection('poops');
+        }
+
+        // Buffer for pins that arrive from Firestore before the map is ready
+        let pendingPins = [];
+
         function loadUserPoops() {
             if (poopsUnsubscribe) { poopsUnsubscribe(); poopsUnsubscribe = null; }
             const col = poopsCollection();
             if (!col) return;
 
-            // Remove all current markers
+            // Clear existing markers
             poops.forEach(p => { if (p.marker && map) map.removeLayer(p.marker); });
-            poops = []; poopSeq = 0;
+            poops = []; poopSeq = 0; pendingPins = [];
             updateBadge();
 
-            // Real-time listener
-            poopsUnsubscribe = col.orderBy('seq').onSnapshot(snapshot => {
+            // Order by server timestamp — reliable across devices, no index needed for single field
+            poopsUnsubscribe = col.orderBy('ts').onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(change => {
                     if (change.type === 'added') {
                         const d = change.doc.data();
-                        // Avoid duplicates
                         if (poops.find(p => p.id === change.doc.id)) return;
-                        const p = addPoopLocal(d.lat, d.lng, change.doc.id, d.seq);
-                        if (d.seq >= poopSeq) poopSeq = d.seq + 1;
+                        // Track highest seq seen so new pins get a higher number
+                        if (d.seq != null && d.seq >= poopSeq) poopSeq = d.seq + 1;
+
+                        if (!map) {
+                            // Map not ready yet — buffer pin data and render later
+                            pendingPins.push({ id: change.doc.id, lat: d.lat, lng: d.lng, seq: d.seq ?? poopSeq++ });
+                        } else {
+                            addPoopLocal(d.lat, d.lng, change.doc.id, d.seq ?? poopSeq++);
+                        }
                     }
                     if (change.type === 'removed') {
                         removePoopLocal(change.doc.id);
+                        pendingPins = pendingPins.filter(p => p.id !== change.doc.id);
                     }
                 });
                 updateBadge(); updateStats();
+            }, err => {
+                console.error('Firestore listener error:', err.code, err.message);
+                showToast('Sync error — check connection');
             });
         }
 
+        // Called from initMap once Leaflet is ready — renders any pins that arrived early
+        function flushPendingPins() {
+            if (!map || !pendingPins.length) return;
+            const toFlush = [...pendingPins];
+            pendingPins = [];
+            toFlush.forEach(p => addPoopLocal(p.lat, p.lng, p.id, p.seq));
+            updateBadge(); updateStats();
+        }
+
         function addPoopLocal(lat, lng, id, seq) {
-            // Renders marker without saving to Firestore (used by snapshot listener)
+            if (!map) {
+                // Safety net — should be caught by pendingPins above, but just in case
+                pendingPins.push({ id, lat, lng, seq });
+                return null;
+            }
             const icon = makePoopIcon(seq, 'default');
             const marker = L.marker([lat, lng], { icon }).addTo(map);
             marker.on('click', () => { if (mode === 'mark') showConfirmDeleteSingle(id); });
@@ -2633,17 +2671,23 @@ out geom;`;
         }
 
         /* ── Override addPoop to save to Firestore ── */
-        const _origAddPoop = addPoop;
         window.addPoop = async function (lat, lng) {
             if (!currentUser || !map) { showToast('Sign in to mark poops'); return; }
             const col = poopsCollection();
             if (!col) return;
-            poopSeq++;
-            const seq = poopSeq;
+            const seq = ++poopSeq;
             try {
-                await col.add({ lat, lng, seq, uid: currentUser.uid, ts: firebase.firestore.FieldValue.serverTimestamp() });
-                // Snapshot listener handles rendering
-            } catch (e) { console.error('Save poop failed:', e); poopSeq--; }
+                // The snapshot listener will render the marker when Firestore confirms
+                await col.add({
+                    lat, lng, seq,
+                    uid: currentUser.uid,
+                    ts: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (e) {
+                console.error('Save poop failed:', e);
+                poopSeq--;
+                showToast('Failed to save — check connection');
+            }
         };
 
         /* ── Override removePoop to delete from Firestore ── */

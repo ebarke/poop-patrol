@@ -1417,19 +1417,65 @@
                 // Ensure map is truly centered after rendering
                 setTimeout(() => map && map.setView([lat, lng], map.getZoom(), { animate: false }), 100);
 
-                map.on('dragstart', () => {
+                // Disable Leaflet's built-in drag — we handle it ourselves so we can
+                // rotate the drag vector to match the current map heading.
+                map.dragging.disable();
+
+                // Custom pan handler — rotate screen-space drag delta into Leaflet map space.
+                // Formula: ldx = sdx*cos(θ) - sdy*sin(θ),  ldy = sdx*sin(θ) + sdy*cos(θ)
+                // where θ = current heading in radians.
+                const mapDiv = document.getElementById('map');
+                let dragActive = false, lastPx = 0, lastPy = 0;
+
+                function panStart(cx, cy) {
+                    dragActive = true; lastPx = cx; lastPy = cy;
                     userPanned = true;
                     document.getElementById('recenter-btn').classList.add('visible');
-                });
+                }
+                function panMove(cx, cy) {
+                    if (!dragActive) return;
+                    const sdx = cx - lastPx, sdy = cy - lastPy;
+                    lastPx = cx; lastPy = cy;
+                    const θ = ((currentHeading || 0) * Math.PI) / 180;
+                    const ldx = sdx * Math.cos(θ) - sdy * Math.sin(θ);
+                    const ldy = sdx * Math.sin(θ) + sdy * Math.cos(θ);
+                    map.panBy([-ldx, -ldy], { animate: false, noMoveStart: true });
+                }
+                function panEnd() { dragActive = false; }
 
-                // Tap anywhere on map = drop poop at USER'S current GPS location
-                map.on('click', e => {
-                    if (shareOpen) { toggleShare(); return; }
-                    if (mode === 'mark') {
-                        if (userLat == null) { showToast('Waiting for GPS…'); return; }
-                        addPoop(userLat, userLng);
+                // Touch
+                mapDiv.addEventListener('touchstart', e => {
+                    if (e.touches.length === 1) panStart(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: true });
+                mapDiv.addEventListener('touchmove', e => {
+                    if (e.touches.length === 1) { e.preventDefault(); panMove(e.touches[0].clientX, e.touches[0].clientY); }
+                }, { passive: false });
+                mapDiv.addEventListener('touchend', panEnd);
+                mapDiv.addEventListener('touchcancel', panEnd);
+
+                // Mouse (desktop)
+                mapDiv.addEventListener('mousedown', e => { if (e.button === 0) panStart(e.clientX, e.clientY); });
+                mapDiv.addEventListener('mousemove', e => panMove(e.clientX, e.clientY));
+                mapDiv.addEventListener('mouseup', panEnd);
+                mapDiv.addEventListener('mouseleave', panEnd);
+
+                // Tap on map = drop poop at user's GPS location (distinguish from drag)
+                let tapStartX = 0, tapStartY = 0;
+                mapDiv.addEventListener('touchstart', e => {
+                    tapStartX = e.touches[0].clientX; tapStartY = e.touches[0].clientY;
+                }, { passive: true });
+                mapDiv.addEventListener('touchend', e => {
+                    if (!e.changedTouches.length) return;
+                    const dx = e.changedTouches[0].clientX - tapStartX;
+                    const dy = e.changedTouches[0].clientY - tapStartY;
+                    if (Math.sqrt(dx * dx + dy * dy) < 10) { // tap, not drag
+                        if (shareOpen) { toggleShare(); return; }
+                        if (mode === 'mark') {
+                            if (userLat == null) { showToast('Waiting for GPS…'); return; }
+                            addPoop(userLat, userLng);
+                        }
                     }
-                });
+                }, { passive: true });
 
                 gpsReady = true;
                 setGpsUI('ready', '±0m');
@@ -1486,7 +1532,7 @@
                 wrapper.style.transition = 'transform 0.7s cubic-bezier(0.25,0.8,0.25,1)';
             }
 
-            // Counter-rotate poop markers so they stay upright
+            // Counter-rotate poop markers so they stay upright on screen
             poops.forEach(p => {
                 if (p.marker) {
                     const el = p.marker.getElement();
@@ -1496,53 +1542,63 @@
                     }
                 }
             });
+
+            // Counter-rotate user marker so arrow stays upright, pointing up = heading direction
+            if (userMarker) {
+                const el = userMarker.getElement();
+                if (el && el.firstElementChild) {
+                    el.firstElementChild.style.transition = 'transform 0.7s cubic-bezier(0.25,0.8,0.25,1)';
+                    el.firstElementChild.style.transform = `rotate(${deg}deg)`;
+                }
+            }
         }
 
-        function applyHeading(rawDeg) {
+        // Circular buffer for median filtering — kills noise spikes before they reach smoothing
+        const RAW_BUF_SIZE = 7;
+        const rawBuf = [];
+
+        function applyHeading(medianDeg) {
             if (!map) return;
 
-            // Deadband on RAW input — if the raw compass hasn't moved much, don't even smooth
-            if (lastAppliedHeading !== null) {
-                let rawDiff = rawDeg - lastAppliedHeading;
-                if (rawDiff > 180) rawDiff -= 360;
-                if (rawDiff < -180) rawDiff += 360;
-                if (Math.abs(rawDiff) < 3.0) return; // ignore jitter under 3°
-            }
-
-            // Throttle: max one update per 250ms
+            // Throttle: max one visual update per 500ms
             const now = Date.now();
-            if (now - lastRotateTime < 250) return;
-            lastRotateTime = now;
+            if (now - lastRotateTime < 500) return;
 
-            // Strong low-pass filter — alpha 0.12
+            // Smooth the pre-filtered median — alpha 0.25 is fine on clean data
             if (headingSmoothed === null) {
-                headingSmoothed = rawDeg;
+                headingSmoothed = medianDeg;
             } else {
-                let diff = rawDeg - headingSmoothed;
+                let diff = medianDeg - headingSmoothed;
                 if (diff > 180) diff -= 360;
                 if (diff < -180) diff += 360;
-                headingSmoothed += diff * 0.12;
+                headingSmoothed += diff * 0.25;
                 headingSmoothed = ((headingSmoothed % 360) + 360) % 360;
             }
 
-            lastAppliedHeading = rawDeg; // track raw, not smoothed
+            // Deadband on SMOOTHED OUTPUT — only rotate if result changed ≥ 5°
+            if (lastAppliedHeading !== null) {
+                let outDiff = headingSmoothed - lastAppliedHeading;
+                if (outDiff > 180) outDiff -= 360;
+                if (outDiff < -180) outDiff += 360;
+                if (Math.abs(outDiff) < 5.0) return;
+            }
+
+            lastRotateTime = now;
+            lastAppliedHeading = headingSmoothed;
             currentHeading = headingSmoothed;
 
             rotatePanes(headingSmoothed);
 
-            // Compass needle counter-rotates to always point true north
             const compassSvg = document.getElementById('compass-svg');
             if (compassSvg) {
-                compassSvg.style.transition = 'transform 0.7s cubic-bezier(0.25,0.8,0.25,1)';
+                compassSvg.style.transition = 'transform 0.8s cubic-bezier(0.25,0.8,0.25,1)';
                 compassSvg.style.transform = `rotate(${headingSmoothed}deg)`;
             }
 
-            // Heading badge
             const badge = document.getElementById('heading-badge');
             if (badge) {
                 const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-                const dir = dirs[Math.round(headingSmoothed / 45) % 8];
-                badge.textContent = Math.round(headingSmoothed) + '° ' + dir;
+                badge.textContent = Math.round(headingSmoothed) + '° ' + dirs[Math.round(headingSmoothed / 45) % 8];
             }
 
             headingUpActive = true;
@@ -1554,18 +1610,24 @@
             if (!map) return;
             headingSmoothed = 0;
             lastAppliedHeading = 0;
+            rawBuf.length = 0;
             const wrapper = document.getElementById('map-rotate-wrapper');
             if (wrapper) {
                 wrapper.style.transition = 'transform 0.5s cubic-bezier(0.25,0.8,0.25,1)';
                 wrapper.style.transform = 'rotate(0deg)';
             }
-            // Also reset poop marker rotations
+            // Reset poop marker rotations
             poops.forEach(p => {
                 if (p.marker) {
                     const el = p.marker.getElement();
                     if (el && el.firstElementChild) el.firstElementChild.style.transform = 'rotate(0deg)';
                 }
             });
+            // Reset user marker
+            if (userMarker) {
+                const el = userMarker.getElement();
+                if (el && el.firstElementChild) el.firstElementChild.style.transform = 'rotate(0deg)';
+            }
             const compassSvg = document.getElementById('compass-svg');
             if (compassSvg) compassSvg.style.transform = 'rotate(0deg)';
             const badge = document.getElementById('heading-badge');
@@ -1584,7 +1646,6 @@
         }
 
         function startOrientationTracking() {
-            // iOS 13+ requires permission
             if (typeof DeviceOrientationEvent !== 'undefined' &&
                 typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission()
@@ -1598,27 +1659,47 @@
         }
 
         function bindOrientation() {
-            let lastHeading = null;
-            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-            window.addEventListener('deviceorientation', handleOrientation, true);
+            // Bind ONLY ONE event to prevent double-firing.
+            // Prefer deviceorientationabsolute (Android true north); fall back to deviceorientation (iOS).
+            let usingAbsolute = false;
+
+            function onAbsolute(e) {
+                if (e.absolute) { usingAbsolute = true; handleOrientation(e); }
+            }
+            function onRelative(e) {
+                if (!usingAbsolute) handleOrientation(e);
+            }
+
+            window.addEventListener('deviceorientationabsolute', onAbsolute, true);
+            window.addEventListener('deviceorientation', onRelative, true);
         }
 
         function handleOrientation(e) {
             let heading = null;
 
             if (e.webkitCompassHeading != null) {
-                // iOS: webkitCompassHeading is degrees from magnetic north, clockwise
-                heading = e.webkitCompassHeading;
-            } else if (e.absolute && e.alpha != null) {
-                // Android absolute: alpha is counter-clockwise from north in some implementations
-                heading = 360 - e.alpha;
+                heading = e.webkitCompassHeading;                     // iOS
             } else if (e.alpha != null) {
-                heading = 360 - e.alpha;
+                heading = (360 - e.alpha + 360) % 360;                // Android
             }
-
             if (heading == null) return;
-            heading = ((heading % 360) + 360) % 360;
-            applyHeading(heading);
+
+            // Push into circular buffer and compute circular median
+            rawBuf.push(heading);
+            if (rawBuf.length > RAW_BUF_SIZE) rawBuf.shift();
+            if (rawBuf.length < 3) return; // wait for buffer to fill
+
+            // Unwrap around first reading to handle 0°/360° boundary
+            const ref = rawBuf[0];
+            const unwrapped = rawBuf.map(h => {
+                let d = h - ref;
+                if (d > 180) d -= 360;
+                if (d < -180) d += 360;
+                return ref + d;
+            }).sort((a, b) => a - b);
+            const median = ((unwrapped[Math.floor(unwrapped.length / 2)] % 360) + 360) % 360;
+
+            applyHeading(median);
         }
 
 
